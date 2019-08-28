@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.DS_Store
+
+scripts/03*
+scripts/scraps.R
+data/cleaned_data/*
+stan/cleaned_data/*
+stan/saved_models/*
+outputs/*
