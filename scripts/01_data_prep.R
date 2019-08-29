@@ -366,8 +366,8 @@ trim.cols <- c(
   "specimen_id", "specimen_type_group",
   "test_requested", "test_requested_protocol", 
   "test_requested_mod", "test_requested_viral_family",
-  "diagnostic_laboratory_name", "confirmation_result_mod", 
-  "virus_detected", "viral_species"
+  "diagnostic_laboratory_name", "test_id", 
+  "confirmation_result_mod", "virus_detected", "viral_species"
 )
 
 dat.f.trim <- select(dat.f, trim.cols)
