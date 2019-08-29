@@ -17,6 +17,7 @@ library(rprojroot)
 library(rstan)
 library(dplyr)
 library(stringr)
+library(assertthat)
 
 
 # Set working directory
@@ -52,6 +53,8 @@ dataset.model.link <-
 
 assert_that(length(data.files) == length(dataset.model.link))
 
+seeds <- c(1, 8, 8, 8, 1, 8)
+
 for(i in 1:length(data.files)) {
   
   # Assign one dataset
@@ -60,7 +63,7 @@ for(i in 1:length(data.files)) {
   
   # Fit the model 
   
-  set.seed(8)
+  set.seed(seeds[i])
   
   fit.model <- stan(
     file = dataset.model.link[i], 
