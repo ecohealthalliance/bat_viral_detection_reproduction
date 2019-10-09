@@ -21,6 +21,8 @@ library(diagram)
 library(maptools)
 library(reskew) # devtools::install_github("eveskew/reskew")
 
+data(wrld_simpl)
+
 logistic <- rethinking::logistic
 
 # Load data
@@ -107,7 +109,7 @@ plot1 <- dat.f.trim %>%
   filter(binomial %in% species.to.keep) %>%
   ggplot(aes(x = pregnant_mod, y = virus_detected)) +
   coord_cartesian(xlim = c(-0.2, 1.2), ylim = c(0, 0.20)) +
-  xlab("") + ylab("Observed Viral Prevalance") +
+  xlab("") + ylab("Observed Viral Detection Probability") +
   scale_x_continuous(
     labels = c("Not Pregnant", "Pregnant"), 
     breaks = c(0, 1)
@@ -156,7 +158,7 @@ plot2 <- dat.f.trim %>%
   filter(binomial %in% species.to.keep) %>%
   ggplot(aes(x = lactating_mod, y = virus_detected)) +
   coord_cartesian(xlim = c(-0.2, 1.2), ylim = c(0, 0.20)) +
-  xlab("") + ylab("Observed Viral Prevalance") +
+  xlab("") + ylab("Observed Viral Detection Probability") +
   scale_x_continuous(
     labels = c("Not Lactating", "Lactating"), 
     breaks = c(0, 1)
@@ -345,7 +347,7 @@ for(x in model.names) {
     rep(NA, sims*3),
     rep(NA, sims*3)
   )
-  colnames(sim.df) <- c("model", "condition", "positives", "prevalence")
+  colnames(sim.df) <- c("model", "condition", "positives", "detection_prob")
   sim.df
   
   set.seed(8)
@@ -369,7 +371,7 @@ for(x in model.names) {
                                samples.per.sim), 
                  size = 1))
     
-    sim.df$prevalence[i:(i + 2)] <- sim.df$positives[i:(i + 2)]/samples.per.sim*100
+    sim.df$detection_prob[i:(i + 2)] <- sim.df$positives[i:(i + 2)]/samples.per.sim
   }
   
   big.sim.df <- bind_rows(big.sim.df, sim.df)
@@ -398,9 +400,9 @@ color.values <- c(
 )
 
 plot <- big.sim.df %>%
-  ggplot(aes(x = condition, y = prevalence, color = condition)) +
+  ggplot(aes(x = condition, y = detection_prob, color = condition)) +
   geom_jitter(height = 0) +
-  ylab("Predicted Viral Prevalence") +
+  ylab("Predicted Viral Detection Probability") +
   theme_minimal() +
   theme(panel.grid.major.x = element_blank(),
         text = element_text(size = 18, color = "black"),
@@ -420,7 +422,7 @@ plot <- big.sim.df %>%
   
 summary.data <- big.sim.df %>%
   group_by(model, condition) %>%
-  summarize(prevalence = mean(prevalence)) %>%
+  summarize(detection_prob = mean(detection_prob)) %>%
   mutate(x = rep(1:3)) %>%
   ungroup()
 
@@ -428,7 +430,7 @@ summary.data <- big.sim.df %>%
 plot + 
   geom_path(
     data = summary.data, inherit.aes = FALSE,
-    aes(x = x, y = prevalence),
+    aes(x = x, y = detection_prob),
     color = alpha("black", 0.8), 
     size = 0.7,
     arrow = arrow(angle = 20, length = unit(0.1, "inches"), type = "closed")
@@ -444,27 +446,73 @@ ggsave("outputs/Fig3.png", height = 5, width = 8, dpi = 350)
 # Supplementary Table 1
 
 
-dat.f.trim %>%
+temp_table <- dat.f.trim %>%
   group_by(binomial) %>%
   summarize(
-    "Viral Tests" = n(),
-    "Positive Viral Tests" = sum(virus_detected == 1),
-    "Viral Tests from Pregnant Individuals" = sum(pregnant_mod == 1),
-    "Viral Tests from Lactating Individuals" = sum(lactating_mod == 1)
+    tests = n(),
+    positive_tests = sum(virus_detected == 1),
+    tests_perc = positive_tests/tests,
+    pregnant_tests = sum(pregnant_mod == 1),
+    positive_pregnant_tests = sum(pregnant_mod == 1 & virus_detected == 1),
+    pregnant_tests_perc = positive_pregnant_tests/pregnant_tests,
+    lactating_tests = sum(lactating_mod == 1),
+    positive_lactating_tests = sum(lactating_mod == 1 & virus_detected == 1),
+    lactating_tests_perc = positive_lactating_tests/lactating_tests,
+  )
+
+totals_table <- data.frame(
+  tests = sum(temp_table$tests),
+  positive_tests = sum(temp_table$positive_tests),
+  pregnant_tests = sum(temp_table$pregnant_tests),
+  positive_pregnant_tests = sum(temp_table$positive_pregnant_tests),
+  lactating_tests = sum(temp_table$lactating_tests),
+  positive_lactating_tests = sum(temp_table$positive_lactating_tests)
+) %>%
+  mutate(
+    tests_perc = positive_tests/tests,
+    pregnant_tests_perc = positive_pregnant_tests/pregnant_tests,
+    lactating_tests_perc = positive_lactating_tests/lactating_tests,
   ) %>%
-  mutate(binomial = as.character(binomial)) %>%
-  dplyr::rename("Host Species" = binomial) %>%
-  arrange(`Host Species`) %>%
+  mutate_if(is.numeric, round, digits = 2) %>%
+  mutate_all(as.character) %>%
+  mutate(
+    tests_perc = str_replace(tests_perc, "NaN", "NA"),
+    pregnant_tests_perc = str_replace(pregnant_tests_perc, "NaN", "NA"),
+    lactating_tests_perc = str_replace(lactating_tests_perc, "NaN", "NA"),
+    tests = paste0(positive_tests, " / ", tests, " (", tests_perc, ")"),
+    pregnant_tests = paste0(positive_pregnant_tests, " / ", pregnant_tests, " (", pregnant_tests_perc, ")"),
+    lactating_tests = paste0(positive_lactating_tests, " / ", lactating_tests, " (", lactating_tests_perc, ")")
+  ) %>%
+  mutate(binomial = "Total") %>%
+  select(binomial, tests, pregnant_tests, lactating_tests) %>%
+  dplyr::rename(
+    "Host Species" = binomial,
+    "All Viral Tests" = tests,
+    "Viral Tests from Pregnant Individuals" = pregnant_tests,
+    "Viral Tests from Lactating Individuals" = lactating_tests)
+  
+temp_table <- temp_table %>%
   ungroup() %>%
-  rbind(
-    c("Total",
-      sum(.$"Viral Tests", na.rm = TRUE),
-      sum(.$"Positive Viral Tests", na.rm = TRUE),
-      sum(.$"Viral Tests from Pregnant Individuals", na.rm = TRUE),
-      sum(.$"Viral Tests from Lactating Individuals", na.rm = TRUE)
-    )
+  mutate_if(is.numeric, round, digits = 2) %>%
+  mutate_all(as.character) %>%
+  mutate(
+    tests_perc = str_replace(tests_perc, "NaN", "NA"),
+    pregnant_tests_perc = str_replace(pregnant_tests_perc, "NaN", "NA"),
+    lactating_tests_perc = str_replace(lactating_tests_perc, "NaN", "NA"),
+    tests = paste0(positive_tests, " / ", tests, " (", tests_perc, ")"),
+    pregnant_tests = paste0(positive_pregnant_tests, " / ", pregnant_tests, " (", pregnant_tests_perc, ")"),
+    lactating_tests = paste0(positive_lactating_tests, " / ", lactating_tests, " (", lactating_tests_perc, ")")
   ) %>%
-  mutate_all(funs(replace(., is.na(.), " "))) %>%
+  select(binomial, tests, pregnant_tests, lactating_tests) %>%
+  dplyr::rename(
+    "Host Species" = binomial,
+    "All Viral Tests" = tests,
+    "Viral Tests from Pregnant Individuals" = pregnant_tests,
+    "Viral Tests from Lactating Individuals" = lactating_tests) %>%
+  arrange(`Host Species`)
+
+temp_table %>%
+  bind_rows(totals_table) %>%
   write_csv(., "outputs/TableS1.csv")
 
 # /*
@@ -655,6 +703,14 @@ var.effect.labels <-
        "diagnostic_laboratory_name" = sort(unique(dat.df$diagnostic_laboratory_name))
   )
 
+label.df <- read_csv("data/lookup_tables/laboratory_name_cleanup.csv")
+
+indexes <- 
+  match(var.effect.labels$diagnostic_laboratory_name, label.df$diagnostic_laboratory_name)
+
+var.effect.labels$diagnostic_laboratory_name <- 
+  label.df$diagnostic_laboratory_name_mod[indexes]
+
 assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 
@@ -685,10 +741,12 @@ p <- model.df %>%
   theme(axis.text.x = element_text(size = 20),
         axis.text.y = element_blank(), 
         axis.title = element_text(size = 32),
+        plot.tag = element_text(size = 50, face = "bold"),
         legend.position = "none",
         strip.background = element_blank(),
         strip.text.x = element_text(size = 18, face = "bold", margin = margin(b = 5))) +
-  coord_cartesian(clip = "off")
+  coord_cartesian(clip = "off") +
+  labs(tag = "a")
 
 p
 
@@ -708,6 +766,7 @@ plotting.list <- list(
      ),
   c(-6, -6, -6, -6, -10, -6)
 )
+labs <- c("b", "c", "d", "e", "f", "g")
 
 for (i in 1:length(plotting.list[[1]])) {
   
@@ -743,9 +802,11 @@ for (i in 1:length(plotting.list[[1]])) {
       coord_cartesian(xlim = c(plotting.list[[4]][i], -1*plotting.list[[4]][i])) +
       theme_ridges(center_axis_labels = TRUE, font_size = 12) +
       theme(axis.title = element_text(size = 32),
+            plot.tag = element_text(size = 50, face = "bold"),
             axis.text.x = element_text(size = 20),
             axis.text.y = element_text(size = 16)) +
-      scale_y_discrete(expand = expand_scale(add = c(0.2, 1.5)))
+      scale_y_discrete(expand = expand_scale(add = c(0.2, 1.5))) +
+      labs(tag = labs[i])
   )
   
   dev.off()
