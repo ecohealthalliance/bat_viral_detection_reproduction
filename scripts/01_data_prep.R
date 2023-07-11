@@ -14,7 +14,6 @@
 # Load packages and functions
 
 library(tidyverse)
-library(eidith)
 library(lubridate)
 library(assertthat)
 library(reskew) # devtools::install_github("eveskew/reskew")
@@ -22,20 +21,26 @@ library(reskew) # devtools::install_github("eveskew/reskew")
 source("R/functions.R")
 
 
-# Import raw EIDITH data tables
+# Import raw P1 data tables
 
-e <- remove_NA_cols(ed_events())
-a <- remove_NA_cols(ed_animals())
-s <- remove_NA_cols(ed_specimens())
-t <- remove_NA_cols(ed_tests())
-v <- remove_NA_cols(ed_viruses())
-ts <- remove_NA_cols(ed_testspecimen())
+e <- read_csv("data/p1_extracts/events.csv") %>%
+  remove_NA_cols()
+a <- read_csv("data/p1_extracts/animals.csv") %>%
+  remove_NA_cols()
+s <- read_csv("data/p1_extracts/specimens.csv") %>%
+  remove_NA_cols()
+t <- read_csv("data/p1_extracts/tests.csv") %>%
+  remove_NA_cols()
+v <- read_csv("data/p1_extracts/viruses.csv") %>%
+  remove_NA_cols()
+ts <- read_csv("data/p1_extracts/test_specimen_ids.csv") %>%
+  remove_NA_cols()
 
 
 # Add higher-level bat taxonomic information to the animal table
 
 a <- left_join(
-  a, read_csv("data/lookup_tables/P1_bat_classification.csv"),
+  a, read_csv("data/lookup_tables/P1_bat_classification.csv"), 
   by = "family"
 )
 
@@ -55,14 +60,13 @@ v <- v %>%
     virus_name, "(new\\s)?strain\\sof\\s", ""))
 
 
-# Create full EIDITH data frame by joining individual tables
+# Create full P1 data frame by joining individual tables
 
 d <- full_join(e, a, by = "event_id") %>%
   full_join(s, by = "animal_id") %>%
   full_join(ts, by = "specimen_id") %>%
   full_join(t, by = "test_id") %>%
   full_join(v, by = "test_id")
-
 
 # Purely aesthetic label changes
 
@@ -102,7 +106,7 @@ d2 <- d
 # Replace erroneous "sample_date" entries for relevant sites
 
 d2$sample_date[which(d2$site_name == "BR_DF_3DEC2012_FAZENDAUFAM_site1_rainy" &
-                      d2$sample_date == "2012-03-12")] <- "2012-12-03"
+                       d2$sample_date == "2012-03-12")] <- "2012-12-03"
 
 d2$sample_date[which(d2$site_name == "BR_DF_9DEC2012_FAZENDAUFAM_site3_rainy" &
                        d2$sample_date == "2012-09-12")] <- "2012-12-09"
@@ -216,11 +220,11 @@ table(d2$viral_family)
 assert_that(
   sum(
     filter(d2, !is.na(confirmation_result) & !is.na(viral_family)) %>%
-    pull(test_requested_viral_family) != 
-    filter(d2, !is.na(confirmation_result) & !is.na(viral_family)) %>%
-    pull(viral_family)
-    ) == 0
-  )
+      pull(test_requested_viral_family) != 
+      filter(d2, !is.na(confirmation_result) & !is.na(viral_family)) %>%
+      pull(viral_family)
+  ) == 0
+)
 
 
 # Add to sample size data frame
@@ -269,7 +273,7 @@ d.sample.sizes <-
 
 d3 <- d.bat %>%
   filter(
-    predict_protocol == "TRUE",
+    predict_protocol == 1,
     animal_classification == "Wild",
     !is.na(age_class),
     age_class != "Unknown",
@@ -277,7 +281,7 @@ d3 <- d.bat %>%
     test_type_broad != "Sequencing",
     test_type_specific != "Real time PCR",
     test_requested_protocol != "other",
-    pooled != "TRUE",
+    pooled != 1,
     !is.na(confirmation_result),
     confirmation_result != "Pool positive - do not count"
   ) %>%
@@ -370,10 +374,10 @@ trim.cols <- c(
   "confirmation_result_mod", "virus_detected", "viral_species"
 )
 
-dat.f.trim <- select(dat.f, trim.cols)
+dat.f.trim <- select(dat.f, all_of(trim.cols))
 
 saveRDS(dat.f.trim, file = "data/cleaned_data/dat.f.trim.rds")
-write_csv(dat.f.trim, path = "data/cleaned_data/dat.f.trim.csv")
+write_csv(dat.f.trim, file = "data/cleaned_data/dat.f.trim.csv")
 
 
 # Add to sample size data frame
@@ -386,7 +390,7 @@ d.sample.sizes <-
 
 # Save sample size data frame
 
-write_csv(d.sample.sizes, path = "outputs/d.sample.sizes.csv")
+write_csv(d.sample.sizes, file = "outputs/d.sample.sizes.csv")
 
 
 # Create viral family-specific data subsets
