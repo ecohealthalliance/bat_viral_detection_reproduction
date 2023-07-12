@@ -8,35 +8,35 @@ data {
   
   // outcome variable
   
-  int<lower=0, upper=1> virus_detected[N];
+  array[N] int<lower=0, upper=1> virus_detected;
   
   
   // variables related to varying effects
   
   int<lower=1> N_host_species;
-  int<lower=1, upper=N_host_species> host_species[N];
+  array[N] int<lower=1, upper=N_host_species> host_species;
   
   int<lower=1> N_year;
-  int<lower=1, upper=N_year> year[N];
+  array[N] int<lower=1, upper=N_year> year;
   
   int<lower=1> N_country;
-  int<lower=1, upper=N_country> country[N];
+  array[N] int<lower=1, upper=N_country> country;
   
   int<lower=1> N_specimen_type_group;
-  int<lower=1, upper=N_specimen_type_group> specimen_type_group[N];
+  array[N] int<lower=1, upper=N_specimen_type_group> specimen_type_group;
   
   int<lower=1> N_test_requested_mod;
-  int<lower=1, upper=N_test_requested_mod> test_requested_mod[N];
+  array[N] int<lower=1, upper=N_test_requested_mod> test_requested_mod;
   
   int<lower=1> N_diagnostic_laboratory_name;
-  int<lower=1, upper=N_diagnostic_laboratory_name> diagnostic_laboratory_name[N];
+  array[N] int<lower=1, upper=N_diagnostic_laboratory_name> diagnostic_laboratory_name;
   
   
   // variables related to reproductive effects
 
-  int<lower=0, upper=1> pregnant_mod[N];
+  array[N] int<lower=0, upper=1> pregnant_mod;
   
-  int<lower=0, upper=1> lactating_mod[N];
+  array[N] int<lower=0, upper=1> lactating_mod;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -64,7 +64,6 @@ parameters {
   vector[N_diagnostic_laboratory_name] alpha_diagnostic_laboratory_name_tilde;
   
   vector<lower=0>[6] sigma_vector;
-  real<lower=0> scale_for_sigmas;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -152,9 +151,9 @@ model {
   
   mu_alpha ~ normal(0, 5);
   
-  beta_pregnant_mod ~ normal(0, 5);
+  beta_pregnant_mod ~ normal(0, 1);
   
-  beta_lactating_mod ~ normal(0, 5);
+  beta_lactating_mod ~ normal(0, 1);
   
   
   // priors for varying effects
@@ -166,8 +165,7 @@ model {
   alpha_test_requested_mod_tilde ~ normal(0, 1);
   alpha_diagnostic_laboratory_name_tilde ~ normal(0, 1);
    
-  sigma_vector ~ cauchy(0, scale_for_sigmas);
-  scale_for_sigmas ~ exponential(1);
+  sigma_vector ~ exponential(1);
   
     
   // likelihood

@@ -14,7 +14,6 @@
 # Load packages and functions
 
 library(tidyverse)
-library(lubridate)
 library(assertthat)
 library(reskew) # devtools::install_github("eveskew/reskew")
 
@@ -336,7 +335,8 @@ dat.f <- d3 %>%
     !is.na(pregnant_mod),
     !is.na(lactating_mod),
     !is.na(binomial)
-  )
+  ) %>%
+  arrange(animal_id, specimen_id, test_requested, test_requested_protocol)
 
 # Find tests that have no viral detections for filtering
 

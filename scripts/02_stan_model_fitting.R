@@ -32,10 +32,9 @@ data.files <- list.files("stan/cleaned_data/")
 
 # Set Stan model parameters
 
-iter <- 3500
-warmup <- 1000
 chains <- 4
-cores <- 4
+iter_warmup <- 1000
+iter_sampling <- 2500
 adapt_delta <- 0.99
 stepsize <- 0.5
 
@@ -55,6 +54,8 @@ assert_that(length(data.files) == length(dataset.model.link))
 
 seeds <- c(1, 8, 8, 8, 1, 8)
 
+# Loop through datasets and fit the models
+
 for(i in 1:length(data.files)) {
   
   # Assign one dataset
@@ -63,21 +64,24 @@ for(i in 1:length(data.files)) {
   
   # Fit the model 
   
-  set.seed(seeds[i])
+  model <- cmdstan_model(dataset.model.link[i])
   
-  fit.model <- stan(
-    file = dataset.model.link[i], 
-    data = stan.data, iter = iter, warmup = warmup,
-    chains = chains, cores = cores, verbose = TRUE,
-    control = list(adapt_delta = adapt_delta, stepsize = stepsize)
+  fit.model <- model$sample(
+    data = stan.data, 
+    chains = chains,
+    parallel_chains = chains,
+    iter_warmup = iter_warmup, 
+    iter_sampling = iter_sampling,
+    adapt_delta = adapt_delta, 
+    step_size = stepsize,
+    seed = seeds[i]
   )
   
   # Save the model
   
-  saveRDS(
-    fit.model,
+  fit.model$save_object(
     file = paste0(
-      "stan/saved_models/",
+      "stan/saved_models_alt/",
       data.files[i] %>%
         str_replace("dat.", "model.") %>%
         str_replace(".stan.rds", ""),
