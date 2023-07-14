@@ -33,35 +33,42 @@ dat.f.stan <- readRDS("stan/cleaned_data/dat.f.stan.rds")
 
 # Load and process Stan models
 
-pars.to.trim <- c(
-  "alpha_host_species_offset_tilde",
-  "alpha_year_tilde",
-  "alpha_country_tilde",
-  "alpha_specimen_type_group_tilde",
-  "alpha_test_requested_mod_tilde",
-  "alpha_diagnostic_laboratory_name_tilde",
-  "alpha",
-  "log_lik",
-  "lp__"
-)
+pars <- c("mu_alpha", "alpha_", "beta", "sigma")
 
 model.names <- str_replace(list.files("stan/saved_models/"), ".rds", "")
+processed.model.names <- paste0(model.names, ".p")
 
 for (model.name in model.names) {
-    
-    processed.model.name <- paste0(model.name, ".p")
-    
-    assign(model.name, 
-           readRDS(paste0("stan/saved_models/", model.name, ".rds"))
-    )
-    
-    assign(processed.model.name, 
-           process_stanfit(get(model.name), pars.to.trim = pars.to.trim))
-    
-    print(paste("Processed model:", model.name))
-    print(paste("Divergences:", toString(get(processed.model.name)$divergences)))
-    print("Rhat summary:")
-    print(get(processed.model.name)$Rhat.summary)
+  
+  processed.model.name <- paste0(model.name, ".p")
+  
+  assign(
+    model.name, 
+    readRDS(paste0("stan/saved_models_alt/", model.name, ".rds"))
+  )
+  
+  assign(
+    processed.model.name,
+    get(model.name)$draws() %>%
+      posterior::as_draws_df() %>%
+      select(contains(pars)) %>%
+      select(!contains("tilde"))
+  )
+  
+  print(paste("Processed model:", model.name))
+  
+  print(paste("Divergences:"))
+  get(model.name)$diagnostic_summary("divergences", quiet = TRUE) %>%
+    unlist() %>%
+    as.vector() %>%
+    print()
+  
+  print("Rhat summary:")
+  get(processed.model.name) %>%
+    posterior::summarise_draws("rhat") %>%
+    pull(rhat) %>%
+    summary() %>%
+    print()
 }
 
 # Load labelling info
@@ -115,12 +122,12 @@ plot1 <- dat.f.trim %>%
     breaks = c(0, 1)
   ) +
   stat_summary(aes(group = binomial), 
-               fun.y = "mean", 
+               fun = "mean", 
                geom = "point",
                color = helper.data$color) +
   stat_summary(aes(group = binomial), 
-               fun.y = "mean", 
-               geom = "line", size = 1,
+               fun = "mean", 
+               geom = "line", linewidth = 1,
                color = alpha(helper.data$color, 0.3)) +
   theme_minimal() +
   theme(
@@ -164,12 +171,12 @@ plot2 <- dat.f.trim %>%
     breaks = c(0, 1)
   ) +
   stat_summary(aes(group = binomial), 
-               fun.y = "mean", 
+               fun = "mean", 
                geom = "point",
                color = helper.data$color) +
   stat_summary(aes(group = binomial), 
-               fun.y = "mean", 
-               geom = "line", size = 1,
+               fun = "mean", 
+               geom = "line", linewidth = 1,
                color = alpha(helper.data$color, 0.3)) +
   theme_minimal() +
   theme(
@@ -214,24 +221,30 @@ bracket <-
          "Lactation Effect")
   )
 
-estimate.method <- "median"
-conf.int <- TRUE
-conf.method <- "HPDinterval"
 conf.level <- 0.95
-
 
 tidy.model.output <- data.frame(NULL)
 
-for (model.name in model.names) {
+for (model.name in processed.model.names) {
   
   temp.df <- 
-    broom::tidy(get(model.name), 
-                estimate.method = estimate.method, conf.int = conf.int,
-                conf.method = conf.method, conf.level = conf.level,
-                pars = pars) %>%
+    get(model.name) %>%
+    select(all_of(pars)) %>%
+    precis(., pars = pars, digits = 3, prob = conf.level) %>%
+    data.frame() %>%
+    select(-histogram) %>%
+    mutate(term = rownames(.)) %>%
+    rename(
+      estimate = mean,
+      conf.low = X2.5.,
+      conf.high = X97.5.
+    ) %>%
+    select(term, everything()) %>%
+    remove_rownames() %>%
     mutate(model = rep(model.name, length(pars)),
-           model = str_replace(model, "model.f", ""),
-           model = str_replace(model, ".", ""),
+           model = str_replace(model, "model\\.f", ""),
+           model = str_replace(model, "\\.p", ""),
+           model = str_replace(model, "\\.", ""),
            model = ifelse(model == "", "All Viral Families", model))
   
   tidy.model.output <- rbind(tidy.model.output, temp.df)
@@ -243,13 +256,16 @@ helper.data <- dat.f.trim %>%
 
 helper.data <- bind_rows(
   helper.data, 
-  data.frame(test_requested_viral_family = "All Viral Families", n = nrow(dat.f.trim)
+  data.frame(
+    test_requested_viral_family = "All Viral Families", 
+    n = nrow(dat.f.trim)
   )
 )
 
 tidy.model.output <- tidy.model.output %>%
-  left_join(., helper.data, 
-            by = c("model" = "test_requested_viral_family")
+  left_join(
+    ., helper.data, 
+    by = c("model" = "test_requested_viral_family")
   ) %>%
   mutate(model = paste0(model, " (n = ", n, ")"))
 
@@ -261,7 +277,7 @@ rev.models.excluding.all <- rev(sort(models.excluding.all))
 
 tidy.model.output <- tidy.model.output %>%
   mutate(
-    model = factor(model, levels = c(rev.models.excluding.all, all.model))
+    model = factor(model, levels = c(all.model, models.excluding.all))
   )
 
 
@@ -273,7 +289,7 @@ plot1 <- {
         beta_lactating_mod = "Lactation Effect"
       )
     ) %>%
-    dotwhisker::dw_plot(
+    dotwhisker::dwplot(
       dot_args = list(size = 2),
     ) +
     custom_theme +
@@ -281,19 +297,26 @@ plot1 <- {
     theme(legend.text = element_text(size = 8),
           legend.title = element_text(size = 9)) +
     geom_vline(xintercept = 0, colour = "black", linetype = 2) +
-    xlim(-13, 5) +
+    xlim(-10, 5) +
     scale_color_manual(values = rev(model.cols),
-                       name = "Viral Dataset") +
-    guides(color = guide_legend(reverse = TRUE))
+                       name = "Viral Dataset")
   } %>%
   dotwhisker::add_brackets(bracket)
 
-plot2 <- model.f %>% 
-  broom::tidy(., 
-              estimate.method = estimate.method, conf.int = conf.int,
-              conf.method = conf.method, conf.level = conf.level,
-              pars = c("alpha_host_species")) %>%
-  dotwhisker::dw_plot(.,
+plot2 <- model.f.p %>%
+  precis(., depth = 2, digits = 3, prob = conf.level) %>%
+  data.frame() %>%
+  select(-histogram) %>%
+  mutate(term = rownames(.)) %>%
+  filter(str_detect(term, "alpha_host_species\\[")) %>%
+  rename(
+    estimate = mean,
+    conf.low = X2.5.,
+    conf.high = X97.5.
+  ) %>%
+  select(term, everything()) %>%
+  remove_rownames() %>%
+  dotwhisker::dwplot(.,
                       dot_args = list(col = "black"),
                       whisker_args = list(col = alpha("black", 0.8))
   ) +
@@ -305,11 +328,19 @@ plot2 <- model.f %>%
   ggtitle("Intercepts by Host Species") +
   theme(plot.title = element_text(hjust = 0.5))
 
-model.f %>% 
-  broom::tidy(., 
-              estimate.method = estimate.method, conf.int = conf.int,
-              conf.method = conf.method, conf.level = conf.level,
-              pars = c("alpha_host_species")) %>%
+model.f.p %>%
+  precis(., depth = 2, digits = 3, prob = conf.level) %>%
+  data.frame() %>%
+  select(-histogram) %>%
+  mutate(term = rownames(.)) %>%
+  filter(str_detect(term, "alpha_host_species\\[")) %>%
+  rename(
+    estimate = mean,
+    conf.low = X2.5.,
+    conf.high = X97.5.
+  ) %>%
+  select(term, everything()) %>%
+  remove_rownames() %>%
   mutate(implied_probability = logistic(estimate)) %>%
   arrange(implied_probability)
 
@@ -337,9 +368,9 @@ samples.per.sim <- 1000
 
 big.sim.df <- data.frame(NULL)
 
-for(x in model.names) {
+for(x in processed.model.names) {
   
-  dat <- get(paste0(x, ".p"))$df
+  dat <- get(x)
   
   sim.df <- data.frame(
     rep(x, sims*3),
@@ -381,16 +412,17 @@ big.sim.df$condition <-
   factor(big.sim.df$condition, 
          levels = c("Non-reproductive", "Pregnant", "Lactating"))
 
-model.labels <- list(
-  'model.f' = "All Viral Families",
-  'model.f.Adenoviridae' = "Adenoviridae",
-  'model.f.Coronaviridae' = "Coronaviridae",
-  'model.f.Herpesviridae' = "Herpesviridae",
-  'model.f.Paramyxoviridae' = "Paramyxoviridae",
-  'model.f.Polyomaviridae' = "Polyomaviridae"
-)
+big.sim.df <- big.sim.df %>%
+  mutate(model = fct_relevel(model, "model.f.p"))
 
-model_labeller <- function(variable, value) {return(model.labels[value])}
+model.labels <- c(
+  model.f.p = "All Viral Families",
+  model.f.Adenoviridae.p = "Adenoviridae",
+  model.f.Coronaviridae.p = "Coronaviridae",
+  model.f.Herpesviridae.p = "Herpesviridae",
+  model.f.Paramyxoviridae.p = "Paramyxoviridae",
+  model.f.Polyomaviridae.p = "Polyomaviridae"
+)
 
 alpha <- 1
 color.values <- c(
@@ -418,7 +450,7 @@ plot <- big.sim.df %>%
     name = "Reproductive Condition",
     aesthetics = c("colour", "fill")
   ) +
-  facet_wrap(~model, labeller = model_labeller, nrow = 1)
+  facet_wrap(~model, labeller = labeller(model = model.labels), nrow = 1)
   
 summary.data <- big.sim.df %>%
   group_by(model, condition) %>%
@@ -432,7 +464,7 @@ plot +
     data = summary.data, inherit.aes = FALSE,
     aes(x = x, y = detection_prob),
     color = alpha("black", 0.8), 
-    size = 0.7,
+    linewidth = 0.7,
     arrow = arrow(angle = 20, length = unit(0.1, "inches"), type = "closed")
   )
 
@@ -610,7 +642,7 @@ summary.mapping.df <- dat.f.trim %>%
   )
 
 color.df <- 
-  data_frame(
+  tibble(
     country = wrld_simpl@data$NAME,
     color = rep(alpha("darkgreen", 0.3), length(wrld_simpl@data$NAME))
   ) %>%
@@ -622,7 +654,7 @@ color.df <-
   )
 
 legend.df <-
-  data_frame(
+  tibble(
     n_tests = c(1, 10, 100, 1000, 10000)
   ) %>%
   mutate(
@@ -652,33 +684,34 @@ dev.off()
 # Figure S4 - Trace plots
 
 
-p <- rstan::traceplot(
-  model.f,
-  pars = c("mu_alpha", 
-           "beta_pregnant_mod", "beta_lactating_mod", 
-           "sigma_vector", "scale_for_sigmas"),
-  ncol = 3
+p <- bayesplot::mcmc_trace(
+  model.f %>% 
+    posterior::as_draws(),
+  pars = c(
+    "mu_alpha", "beta_pregnant_mod", "beta_lactating_mod",
+    "sigma_vector[1]", "sigma_vector[2]", "sigma_vector[3]",
+    "sigma_vector[4]", "sigma_vector[5]", "sigma_vector[6]"
+  )
 )
 
 levels(p$data$parameter) <- c(
   "Global Intercept", 
   "Pregnancy Effect", "Lactation Effect",
   "σ (Host Species)", "σ (Year)", "σ (Country)", 
-  "σ (Specimen Type)", "σ (Viral Test Protocol)", "σ (Diagnostic Laboratory)",
-  "σ (Hierarchical Scale)"
+  "σ (Specimen Type)", "σ (Viral Test Protocol)", "σ (Diagnostic Laboratory)"
 )
 
 
 p + scale_color_viridis(discrete = TRUE, option = "plasma", end = 0.85) +
   ggtitle("Parameter trace plots for Bayesian model of viral detection in adult female bats") +
   theme(
-    text = element_text(size = 14, color = "black"),
+    text = element_text(size = 14, color = "black", family = "sans"),
     plot.title = element_text(size = 18),
     strip.text.x = element_text(size = 14, face = "bold"),
     legend.position = "none"
   )
 
-ggsave("outputs/FigS4.png", width = 10, height = 12, dpi = 350)
+ggsave("outputs/FigS4.png", width = 10, height = 10, dpi = 350)
 
 # /*
 #==============================================================================
@@ -689,7 +722,7 @@ ggsave("outputs/FigS4.png", width = 10, height = 12, dpi = 350)
 
 
 dat.df <- dat.f.trim
-model.df <- model.f.p$df
+model.df <- model.f.p
 
 cols.to.plot <- grep("alpha", colnames(model.df), value = T) %>%
   grep("mu_|tilde|species\\[", ., value = T, invert = T)
@@ -719,8 +752,8 @@ assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 png("outputs/FigS5a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
-  select(one_of(cols.to.plot)) %>%
-  gather_("parameter", "value", cols.to.plot, factor_key = T) %>%
+  select(all_of(cols.to.plot)) %>%
+  gather("parameter", "value", cols.to.plot, factor_key = T) %>%
   mutate(
     varying_effect_group = gsub("\\[[0-9]+\\]", "", parameter) %>% gsub("alpha_", "", .),
     varying_effect_group = factor(varying_effect_group, names(var.effect.group.labels))
@@ -732,7 +765,7 @@ p <- model.df %>%
              height = ..density.., fill = varying_effect_group)) +
   xlab("Parameter Value") + ylab("Varying Intercepts Cluster") +
   geom_density_ridges() +
-  xlim(-10, 10) +
+  xlim(-11, 11) +
   # To facet by varying effects group
   facet_wrap(~varying_effect_group, scale = "free_y", 
              labeller = as_labeller(var.effect.group.labels)) +
@@ -764,7 +797,7 @@ plotting.list <- list(
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
      ),
-  c(-6, -6, -6, -6, -10, -6)
+  c(-6, -6, -6, -6, -11, -6)
 )
 labs <- c("b", "c", "d", "e", "f", "g")
 
@@ -786,8 +819,8 @@ for (i in 1:length(plotting.list[[1]])) {
   
   print(
     model.df %>% 
-      select(one_of(cols.to.plot)) %>%
-      gather_("parameter", "value", cols.to.plot, factor_key = T) %>%
+      select(all_of(cols.to.plot)) %>%
+      gather("parameter", "value", cols.to.plot, factor_key = T) %>%
       mutate(
         varying_effect_group = gsub("\\[[0-9]+\\]", "", parameter) %>% gsub("alpha_", "", .)
       ) %>%
@@ -805,7 +838,7 @@ for (i in 1:length(plotting.list[[1]])) {
             plot.tag = element_text(size = 50, face = "bold"),
             axis.text.x = element_text(size = 20),
             axis.text.y = element_text(size = 16)) +
-      scale_y_discrete(expand = expand_scale(add = c(0.2, 1.5))) +
+      scale_y_discrete(expand = expansion(add = c(0.2, 1.5))) +
       labs(tag = labs[i])
   )
   
