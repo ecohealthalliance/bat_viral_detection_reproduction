@@ -19,10 +19,8 @@ library(viridis)
 library(cowplot)
 library(diagram)
 library(maptools)
-library(reskew) # devtools::install_github("eveskew/reskew")
 
 data(wrld_simpl)
-
 logistic <- rethinking::logistic
 
 # Load data
@@ -40,12 +38,14 @@ processed.model.names <- paste0(model.names, ".p")
 
 for (model.name in model.names) {
   
-  processed.model.name <- paste0(model.name, ".p")
-  
+  # Load fit model
   assign(
     model.name, 
     readRDS(paste0("stan/saved_models_alt/", model.name, ".rds"))
   )
+  
+  # Generate processed model with a subset of parameters in data frame format
+  processed.model.name <- paste0(model.name, ".p")
   
   assign(
     processed.model.name,
@@ -57,12 +57,14 @@ for (model.name in model.names) {
   
   print(paste("Processed model:", model.name))
   
+  # Print per-chain divergent transitions using full fit model
   print(paste("Divergences:"))
   get(model.name)$diagnostic_summary("divergences", quiet = TRUE) %>%
     unlist() %>%
     as.vector() %>%
     print()
   
+  # Print R-hat summary for all parameters in the processed model
   print("Rhat summary:")
   get(processed.model.name) %>%
     posterior::summarise_draws("rhat") %>%
@@ -99,6 +101,8 @@ custom_theme <- theme_minimal() +
 # Figure 1 - Observed data summary
 
 
+# Which species have non-pregnant and pregnant individuals in the modeling 
+# dataset?
 species.to.keep <- dat.f.trim %>%
   distinct(binomial, pregnant_mod) %>%
   group_by(binomial) %>%
@@ -121,14 +125,18 @@ plot1 <- dat.f.trim %>%
     labels = c("Not Pregnant", "Pregnant"), 
     breaks = c(0, 1)
   ) +
-  stat_summary(aes(group = binomial), 
-               fun = "mean", 
-               geom = "point",
-               color = helper.data$color) +
-  stat_summary(aes(group = binomial), 
-               fun = "mean", 
-               geom = "line", linewidth = 1,
-               color = alpha(helper.data$color, 0.3)) +
+  stat_summary(
+    aes(group = binomial),
+    fun = "mean",
+    geom = "point",
+    color = helper.data$color
+  ) +
+  stat_summary(
+    aes(group = binomial),
+    fun = "mean",
+    geom = "line", linewidth = 1,
+    color = alpha(helper.data$color, 0.3)
+  ) +
   theme_minimal() +
   theme(
     panel.grid = element_blank(),
@@ -136,6 +144,7 @@ plot1 <- dat.f.trim %>%
     strip.text = element_text(face = "bold")
   )
 
+# Table summarizing the pregnancy dataset
 dat.f.trim %>%
   filter(binomial %in% species.to.keep) %>%
   group_by(binomial, pregnant_mod) %>%
@@ -148,6 +157,8 @@ dat.f.trim %>%
   spread(key = pregnant_mod, value = prev) %>%
   mutate(pregnant_prev_lower = `1` <= `0`)
     
+# Which species have non-lactating and lactating individuals in the modeling 
+# dataset?
 species.to.keep <- dat.f.trim %>%
   distinct(binomial, lactating_mod) %>%
   group_by(binomial) %>%
@@ -170,14 +181,18 @@ plot2 <- dat.f.trim %>%
     labels = c("Not Lactating", "Lactating"), 
     breaks = c(0, 1)
   ) +
-  stat_summary(aes(group = binomial), 
-               fun = "mean", 
-               geom = "point",
-               color = helper.data$color) +
-  stat_summary(aes(group = binomial), 
-               fun = "mean", 
-               geom = "line", linewidth = 1,
-               color = alpha(helper.data$color, 0.3)) +
+  stat_summary(
+    aes(group = binomial), 
+    fun = "mean", 
+    geom = "point",
+    color = helper.data$color
+  ) +
+  stat_summary(
+    aes(group = binomial), 
+    fun = "mean", 
+    geom = "line", linewidth = 1,
+    color = alpha(helper.data$color, 0.3)
+  ) +
   theme_minimal() +
   theme(
     panel.grid = element_blank(),
@@ -185,6 +200,7 @@ plot2 <- dat.f.trim %>%
     strip.text = element_text(face = "bold")
   )
 
+# Table summarizing the lactation dataset
 dat.f.trim %>%
   filter(binomial %in% species.to.keep) %>%
   group_by(binomial, lactating_mod) %>%
@@ -211,7 +227,7 @@ ggsave("outputs/Fig1.png", width = 10, height = 6, dpi = 350)
 # Figure 2 - Model parameter summary
 
 
-model.cols <- c("black", "deepskyblue3", "darkseagreen4", 
+model.colors <- c("black", "deepskyblue3", "darkseagreen4", 
                 "coral3", "plum4", "darkorange3")
 
 pars <- c("mu_alpha", "beta_pregnant_mod", "beta_lactating_mod")
@@ -221,19 +237,23 @@ bracket <-
          "Lactation Effect")
   )
 
-conf.level <- 0.95
+# Generate a data frame of parameter means and HPDIs for each relevant
+# parameter from each fit model
 
 tidy.model.output <- data.frame(NULL)
+conf.level <- 0.95
 
 for (model.name in processed.model.names) {
   
   temp.df <- 
     get(model.name) %>%
     select(all_of(pars)) %>%
+    # Use precis() to get means and HPDIs
     precis(., pars = pars, digits = 3, prob = conf.level) %>%
     data.frame() %>%
     select(-histogram) %>%
     mutate(term = rownames(.)) %>%
+    # Rename columns to work easily with the dotwhisker package 
     rename(
       estimate = mean,
       conf.low = X2.5.,
@@ -241,11 +261,14 @@ for (model.name in processed.model.names) {
     ) %>%
     select(term, everything()) %>%
     remove_rownames() %>%
-    mutate(model = rep(model.name, length(pars)),
-           model = str_replace(model, "model\\.f", ""),
-           model = str_replace(model, "\\.p", ""),
-           model = str_replace(model, "\\.", ""),
-           model = ifelse(model == "", "All Viral Families", model))
+    # Clean up model names
+    mutate(
+      model = rep(model.name, length(pars)),
+      model = str_replace(model, "model\\.f", ""),
+      model = str_replace(model, "\\.p", ""),
+      model = str_replace(model, "\\.", ""),
+      model = ifelse(model == "", "All Viral Families", model)
+    )
   
   tidy.model.output <- rbind(tidy.model.output, temp.df)
 }
@@ -273,7 +296,6 @@ models.excluding.all <-
   unique(tidy.model.output$model)[!str_detect(unique(tidy.model.output$model), "All Viral Families")]
 all.model <- 
   unique(tidy.model.output$model)[str_detect(unique(tidy.model.output$model), "All Viral Families")]
-rev.models.excluding.all <- rev(sort(models.excluding.all))
 
 tidy.model.output <- tidy.model.output %>%
   mutate(
@@ -294,12 +316,16 @@ plot1 <- {
     ) +
     custom_theme +
     xlab("Parameter Estimate") +
-    theme(legend.text = element_text(size = 8),
-          legend.title = element_text(size = 9)) +
+    theme(
+      legend.text = element_text(size = 8),
+      legend.title = element_text(size = 9)
+    ) +
     geom_vline(xintercept = 0, colour = "black", linetype = 2) +
     xlim(-10, 5) +
-    scale_color_manual(values = rev(model.cols),
-                       name = "Viral Dataset")
+    scale_color_manual(
+      values = rev(model.colors),
+      name = "Viral Dataset"
+    )
   } %>%
   dotwhisker::add_brackets(bracket)
 
@@ -316,9 +342,10 @@ plot2 <- model.f.p %>%
   ) %>%
   select(term, everything()) %>%
   remove_rownames() %>%
-  dotwhisker::dwplot(.,
-                      dot_args = list(col = "black"),
-                      whisker_args = list(col = alpha("black", 0.8))
+  dotwhisker::dwplot(
+    .,
+    dot_args = list(col = "black"),
+    whisker_args = list(col = alpha("black", 0.8))
   ) +
   custom_theme +
   theme(axis.text.y = element_blank()) +
@@ -345,7 +372,8 @@ model.f.p %>%
   arrange(implied_probability)
 
 
-plot_grid(plot1, plot2, ncol = 1, scale = c(1, 0.95), rel_heights = c(1, 1.1),
+plot_grid(plot1, plot2, 
+          ncol = 1, scale = c(1, 0.95), rel_heights = c(1, 1.1),
           labels = "auto", label_size = 24)
 
 ggsave("outputs/Fig2.png", width = 8, height = 10, dpi = 350)
@@ -353,6 +381,21 @@ ggsave("outputs/Fig2.png", width = 8, height = 10, dpi = 350)
 plot1
 
 ggsave("outputs/Fig2.png", width = 8, height = 6, dpi = 350)
+
+# What proportion of posterior probability mass supports a negative pregnancy
+# effect for each model?
+sum(model.f.p$beta_pregnant_mod < 0)/
+  nrow(model.f.p)
+sum(model.f.Adenoviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.Adenoviridae.p)
+sum(model.f.Coronaviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.Coronaviridae.p)
+sum(model.f.Herpesviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.Herpesviridae.p)
+sum(model.f.Paramyxoviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.Paramyxoviridae.p)
+sum(model.f.Polyomaviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.Polyomaviridae.p)
  
 # /*
 #==============================================================================
@@ -386,21 +429,27 @@ for(x in processed.model.names) {
   for (i in (1:sims)*3 - 2) {
     
     sim.df$positives[i] <-
-      sum(rbinom(samples.per.sim, 
-                 prob = sample(logistic(dat$mu_alpha), samples.per.sim), 
-                 size = 1))
+      sum(
+        rbinom(samples.per.sim, 
+               prob = sample(logistic(dat$mu_alpha), samples.per.sim), 
+               size = 1)
+      )
     
     sim.df$positives[i + 1] <-
-      sum(rbinom(samples.per.sim, 
-                 prob = sample(logistic(dat$mu_alpha + dat$beta_pregnant_mod), 
-                               samples.per.sim), 
-                 size = 1))
+      sum(
+        rbinom(samples.per.sim, 
+               prob = sample(logistic(dat$mu_alpha + dat$beta_pregnant_mod), 
+                             samples.per.sim), 
+               size = 1)
+      )
     
     sim.df$positives[i + 2] <-
-      sum(rbinom(samples.per.sim, 
-                 prob = sample(logistic(dat$mu_alpha + dat$beta_lactating_mod),
-                               samples.per.sim), 
-                 size = 1))
+      sum(
+        rbinom(samples.per.sim, 
+               prob = sample(logistic(dat$mu_alpha + dat$beta_lactating_mod),
+                             samples.per.sim), 
+               size = 1)
+      )
     
     sim.df$detection_prob[i:(i + 2)] <- sim.df$positives[i:(i + 2)]/samples.per.sim
   }
@@ -408,12 +457,13 @@ for(x in processed.model.names) {
   big.sim.df <- bind_rows(big.sim.df, sim.df)
 }
 
-big.sim.df$condition <- 
-  factor(big.sim.df$condition, 
-         levels = c("Non-reproductive", "Pregnant", "Lactating"))
-
 big.sim.df <- big.sim.df %>%
-  mutate(model = fct_relevel(model, "model.f.p"))
+  mutate(
+    model = 
+      fct_relevel(model, "model.f.p"),
+    condition = 
+      fct_relevel(condition, c("Non-reproductive", "Pregnant", "Lactating"))
+  )
 
 model.labels <- c(
   model.f.p = "All Viral Families",
@@ -436,14 +486,15 @@ plot <- big.sim.df %>%
   geom_jitter(height = 0) +
   ylab("Predicted Viral Detection Probability") +
   theme_minimal() +
-  theme(panel.grid.major.x = element_blank(),
-        text = element_text(size = 18, color = "black"),
-        strip.text = element_text(size = 10, face = "bold"),
-        axis.text.x = element_blank(),
-        axis.title.x = element_blank(),
-        legend.title = element_blank(),
-        legend.position = "bottom",
-        legend.direction = "horizontal"
+  theme(
+    panel.grid.major.x = element_blank(),
+    text = element_text(size = 18, color = "black"),
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.direction = "horizontal"
   ) +
   scale_color_manual(
     values = color.values, 
@@ -592,8 +643,10 @@ shadow.col <- alpha("white", 0.0)
 
 png("outputs/FigS1.png", width = 1400, height = 1200, res = 160)
 
-par(mar = c(0, 0, 0, 0) + 0.05,
-    family = "Arial")
+par(
+  mar = c(0, 0, 0, 0) + 0.05,
+  family = "Arial"
+)
 
 openplotmat()
 
@@ -702,7 +755,8 @@ levels(p$data$parameter) <- c(
 )
 
 
-p + scale_color_viridis(discrete = TRUE, option = "plasma", end = 0.85) +
+p + 
+  scale_color_viridis(discrete = TRUE, option = "plasma", end = 0.85) +
   ggtitle("Parameter trace plots for Bayesian model of viral detection in adult female bats") +
   theme(
     text = element_text(size = 14, color = "black", family = "sans"),
@@ -728,12 +782,14 @@ cols.to.plot <- grep("alpha", colnames(model.df), value = T) %>%
   grep("mu_|tilde|species\\[", ., value = T, invert = T)
 
 var.effect.labels <- 
-  list("host_species_offset" = sort(unique(dat.df$binomial)),
-       "year" = levels(factor(dat.df$year)),
-       "country" = levels(factor(dat.df$country)),
-       "specimen_type_group" = sort(unique(dat.df$specimen_type_group)),
-       "test_requested_mod" = sort(unique(dat.df$test_requested_mod)),
-       "diagnostic_laboratory_name" = sort(unique(dat.df$diagnostic_laboratory_name))
+  list(
+    "host_species_offset" = sort(unique(dat.df$binomial)),
+    "year" = levels(factor(dat.df$year)),
+    "country" = levels(factor(dat.df$country)),
+    "specimen_type_group" = sort(unique(dat.df$specimen_type_group)),
+    "test_requested_mod" = sort(unique(dat.df$test_requested_mod)),
+    "diagnostic_laboratory_name" = sort(unique(dat.df$diagnostic_laboratory_name)
+    )
   )
 
 label.df <- read_csv("data/lookup_tables/laboratory_name_cleanup.csv")
@@ -771,13 +827,15 @@ p <- model.df %>%
              labeller = as_labeller(var.effect.group.labels)) +
   theme_ridges(center_axis_labels = TRUE, font_size = 16) +
   # To remove y-axis labels
-  theme(axis.text.x = element_text(size = 20),
-        axis.text.y = element_blank(), 
-        axis.title = element_text(size = 32),
-        plot.tag = element_text(size = 50, face = "bold"),
-        legend.position = "none",
-        strip.background = element_blank(),
-        strip.text.x = element_text(size = 18, face = "bold", margin = margin(b = 5))) +
+  theme(
+    axis.text.x = element_text(size = 20),
+    axis.text.y = element_blank(), 
+    axis.title = element_text(size = 32),
+    plot.tag = element_text(size = 50, face = "bold"),
+    legend.position = "none",
+    strip.background = element_blank(),
+    strip.text.x = element_text(size = 18, face = "bold", margin = margin(b = 5))
+  ) +
   coord_cartesian(clip = "off") +
   labs(tag = "a")
 
@@ -834,10 +892,12 @@ for (i in 1:length(plotting.list[[1]])) {
       geom_density_ridges(fill = fill.color) +
       coord_cartesian(xlim = c(plotting.list[[4]][i], -1*plotting.list[[4]][i])) +
       theme_ridges(center_axis_labels = TRUE, font_size = 12) +
-      theme(axis.title = element_text(size = 32),
-            plot.tag = element_text(size = 50, face = "bold"),
-            axis.text.x = element_text(size = 20),
-            axis.text.y = element_text(size = 16)) +
+      theme(
+        axis.title = element_text(size = 32),
+        plot.tag = element_text(size = 50, face = "bold"),
+        axis.text.x = element_text(size = 20),
+        axis.text.y = element_text(size = 16)
+      ) +
       scale_y_discrete(expand = expansion(add = c(0.2, 1.5))) +
       labs(tag = labs[i])
   )
