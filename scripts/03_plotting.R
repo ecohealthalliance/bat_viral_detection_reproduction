@@ -772,7 +772,7 @@ ggsave("outputs/FigS4.png", width = 10, height = 10, dpi = 350)
 # */
 
 
-# Figure S5 - Ridgeline plots for varying effects
+# Figure S6 - Ridgeline plots for varying effects
 
 
 dat.df <- dat.f.trim
@@ -805,7 +805,7 @@ assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 # To plot all varying effects
 
-png("outputs/FigS5a.png", width = 1200, height = 800)
+png("outputs/FigS6a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -849,8 +849,8 @@ dev.off()
 plotting.list <- list(
   c("host_species_offset", "year", "country",
     "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
-  c("outputs/FigS5b.png", "outputs/FigS5c.png", "outputs/FigS5d.png", 
-    "outputs/FigS5e.png", "outputs/FigS5f.png", "outputs/FigS5g.png"),
+  c("outputs/FigS6b.png", "outputs/FigS6c.png", "outputs/FigS6d.png", 
+    "outputs/FigS6e.png", "outputs/FigS6f.png", "outputs/FigS6g.png"),
   c("Host Species", "Year of Sample Collection",
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
@@ -904,3 +904,151 @@ for (i in 1:length(plotting.list[[1]])) {
   
   dev.off()
 }
+
+# /*
+#==============================================================================
+# */
+
+
+# Figure S5 - In-sample prediction plot
+
+# Generate data frame of all alpha values from the full fit model
+d.preds <- model.f %>%
+  posterior::as_draws_df() %>%
+  select(contains("alpha")) %>%
+  select(!contains("_")) 
+
+# How many iterations total?
+n.iter <- dim(d.preds)[1]
+
+# How many data points total?
+n.datapoints <- dim(d.preds)[2]
+
+# Pivot the alpha matrix such that we get a data frame with columns for
+# the model iteration, data point, and probability of success
+d.preds <- d.preds %>%
+  tidyr::pivot_longer(
+    cols = contains("alpha"),
+    names_to = "data point",
+    values_to = "alpha"
+  ) %>%
+  mutate(
+    iteration = rep(1:n.iter, each = n.datapoints),
+    prob = logistic(alpha)
+  )
+
+set.seed(1)
+
+# Generate 0/1 predictions for each data point/iteration combination using
+# the modeled probability of success
+d.preds$pred <- rbinom(
+  n = length(d.preds$prob), 
+  size = 1, 
+  prob = d.preds$prob
+)
+
+# Record the test requested viral family for each observation
+d.preds$viral_family <- rep(
+  dat.f.trim$test_requested_viral_family,
+  times = n.iter
+)
+
+# Summarize the predictions (across all viral families) to generate metrics
+# of test positivity
+full.dataset.preds <- d.preds %>%
+  group_by(iteration) %>%
+  summarize(
+    n = n(),
+    n_positive = sum(pred),
+    positivity = n_positive/n
+  ) %>%
+  ungroup() %>%
+  mutate(viral_family = rep("All Data", times = n()))
+
+# Summarize the predictions by viral family to generate metrics
+# of test positivity and bind in the all viral families data
+viral.family.preds <- d.preds %>%
+  group_by(viral_family, iteration) %>%
+  summarize(
+    n = n(),
+    n_positive = sum(pred),
+    positivity = n_positive/n
+  ) %>%
+  ungroup() %>%
+  bind_rows(full.dataset.preds)
+
+# Summarize test positivity predictions using HPDIs
+plot.data <- viral.family.preds %>%
+  group_by(viral_family, n) %>%
+  mutate(
+    lower.95 = HPDI(positivity, prob = 0.95)[1],
+    upper.95 = HPDI(positivity, prob = 0.95)[2],
+    lower.50 = HPDI(positivity, prob = 0.5)[1],
+    upper.50 = HPDI(positivity, prob = 0.5)[2]
+  ) %>%
+  slice(1) %>%
+  ungroup() %>%
+  mutate(
+    viral_family = paste0(viral_family, "\n(n = ", n, ")"),
+    viral_family = fct_relevel(
+      viral_family,
+      "All Data\n(n = 9694)"
+    )
+  )
+
+# Get analogous test positivity metrics for the observed data
+full.dataset.obs <- dat.f.trim %>%
+  group_by() %>%
+  summarize(
+    n = n(),
+    n_positive = sum(virus_detected),
+    positivity = n_positive/n
+  ) %>%
+  ungroup() %>%
+  mutate(viral_family = rep("All Data", times = n()))
+
+viral.family.obs <- dat.f.trim %>%
+  group_by(test_requested_viral_family) %>%
+  summarize(
+    n = n(),
+    n_positive = sum(virus_detected),
+    positivity = n_positive/n
+  ) %>%
+  ungroup() %>%
+  rename(viral_family = test_requested_viral_family) %>%
+  bind_rows(full.dataset.obs) %>%
+  mutate(
+    viral_family = paste0(viral_family, "\n(n = ", n, ")"),
+    viral_family = fct_relevel(
+      viral_family,
+      "All Data\n(n = 9694)"
+    )
+  )
+
+# Plot and save
+plot.data %>%
+  ggplot(aes(x = viral_family, y = positivity)) +
+  geom_linerange(
+    aes(ymin = lower.95, ymax = upper.95), 
+    linewidth = 1, color = "darkgrey"
+  ) +
+  geom_linerange(
+    aes(ymin = lower.50, ymax = upper.50), 
+    linewidth = 4, color = "darkgrey"
+  ) +
+  geom_point(
+    data = viral.family.obs, color = "darkred",
+    size = 2
+  ) +
+  geom_vline(xintercept = 1.5, lty = 2) +
+  ylab("Test positivity") +
+  xlab("") +
+  ylim(0, 0.2) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    axis.title.y = element_text(size = 16),
+    axis.text.x = element_text(face = "bold")
+  )
+
+ggsave("outputs/FigS5.png", height = 5, width = 10, dpi = 350)

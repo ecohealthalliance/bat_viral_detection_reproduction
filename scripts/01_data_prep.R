@@ -261,7 +261,7 @@ d.sample.sizes <-
 # Create further filtered data frame for analysis
 
 # Make sure PREDICT protocol == "TRUE"
-# Make sure animal_classifcation == "Wild"
+# Make sure animal_classification == "Wild"
 # Remove age_class == NA
 # Remove age_class == "Unknown"
 # Remove serology, next generation sequencing, and real time PCR tests
@@ -342,7 +342,7 @@ dat.f <- d3 %>%
 
 tests.no.positives <- dat.f %>%
   group_by(test_requested) %>%
-  dplyr::summarize(positives = sum(virus_detected)) %>%
+  summarize(positives = sum(virus_detected)) %>%
   filter(positives == 0) %>%
   select(test_requested) %>%
   unlist(use.names = FALSE)
@@ -398,15 +398,13 @@ write_csv(d.sample.sizes, file = "outputs/d.sample.sizes.csv")
 viral.fam.preg.pos <- dat.f.trim %>% 
   group_by(test_requested_viral_family, pregnant_mod) %>%
   summarize(positive = sum(virus_detected)) %>%
-  filter(pregnant_mod == 1,
-         positive >= 1) %>%
+  filter(pregnant_mod == 1, positive >= 1) %>%
   pull(test_requested_viral_family)
 
 viral.fam.lac.pos <- dat.f.trim %>% 
   group_by(test_requested_viral_family, lactating_mod) %>%
   summarize(positive = sum(virus_detected)) %>%
-  filter(lactating_mod == 1,
-         positive >= 1) %>%
+  filter(lactating_mod == 1, positive >= 1) %>%
   pull(test_requested_viral_family)
 
 viral.families <- intersect(viral.fam.preg.pos, viral.fam.lac.pos)

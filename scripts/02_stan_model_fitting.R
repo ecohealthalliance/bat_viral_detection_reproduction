@@ -13,16 +13,10 @@
 
 # Load packages
 
-library(rprojroot)
-library(rstan)
+library(cmdstanr)
 library(dplyr)
 library(stringr)
 library(assertthat)
-
-
-# Set working directory
-
-setwd(find_rstudio_root_file())
 
 
 # Get data files
