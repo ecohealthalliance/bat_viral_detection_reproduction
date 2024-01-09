@@ -11,6 +11,10 @@
 #+ loading_chunk, echo=FALSE, message=FALSE, results="hide"
 
 
+# Loop through all datasets twice, the first time fitting the pooled effect
+# model, the second time fitting the varying intercepts and slopes model
+
+
 # Load packages
 
 library(cmdstanr)
@@ -21,7 +25,7 @@ library(assertthat)
 
 # Get data files
 
-data.files <- list.files("stan/cleaned_data/")
+data.files <- rep(list.files("stan/cleaned_data/"), times = 2)
 
 
 # Set Stan model parameters
@@ -36,17 +40,24 @@ stepsize <- 0.5
 # Fit Stan models
 
 dataset.model.link <-
-  c("stan/model_code/bat_reproduction.stan",
+  c(
+    "stan/model_code/bat_reproduction.stan",
     "stan/model_code/bat_reproduction.stan",
     "stan/model_code/bat_reproduction.stan",
     "stan/model_code/bat_reproduction.stan",
     "stan/model_code/bat_reproduction_no_test_variation.stan",
-    "stan/model_code/bat_reproduction.stan"
+    "stan/model_code/bat_reproduction.stan",
+    "stan/model_code/varying_ints_slopes_centered.stan",
+    "stan/model_code/varying_ints_slopes_centered.stan",
+    "stan/model_code/varying_ints_slopes_centered.stan",
+    "stan/model_code/varying_ints_slopes_centered.stan",
+    "stan/model_code/varying_ints_slopes_centered_no_test_variation.stan",
+    "stan/model_code/varying_ints_slopes_centered.stan"
   )
 
 assert_that(length(data.files) == length(dataset.model.link))
 
-seeds <- c(1, 8, 8, 8, 1, 8)
+seeds <- rep(c(1, 8, 8, 8, 1, 8), times = 2)
 
 # Loop through datasets and fit the models
 
@@ -75,10 +86,18 @@ for(i in 1:length(data.files)) {
   
   fit.model$save_object(
     file = paste0(
-      "stan/saved_models_alt/",
-      data.files[i] %>%
-        str_replace("dat.", "model.") %>%
-        str_replace(".stan.rds", ""),
-      ".rds")
+      "stan/saved_models/",
+      ifelse(
+        str_detect(dataset.model.link[i], "varying"),
+        # names for varying effect models
+        data.files[i] %>%
+          str_replace("dat.f", "model.f.v") %>%
+          str_replace(".stan", ""),
+        # names for pooled effect models
+        data.files[i] %>%
+          str_replace("dat.f", "model.f") %>%
+          str_replace(".stan", "")
+      )
+    )
   )
 }

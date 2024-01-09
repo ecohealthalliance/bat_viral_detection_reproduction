@@ -137,7 +137,7 @@ model {
 
   // priors for main effects
   
-  mu_alpha ~ normal(0, 5);
+  mu_alpha ~ normal(0, 2);
   
   beta_pregnant_mod ~ normal(0, 1);
   

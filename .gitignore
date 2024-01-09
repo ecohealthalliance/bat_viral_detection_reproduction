@@ -9,5 +9,5 @@ data/p1_extracts
 docs
 outputs
 scripts/scraps.R
-stan/
+stan/*/*
 !stan/model_code/*.stan
