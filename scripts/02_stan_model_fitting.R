@@ -11,7 +11,7 @@
 #+ loading_chunk, echo=FALSE, message=FALSE, results="hide"
 
 
-# Loop through all datasets twice, the first time fitting the pooled effect
+# Loop through all datasets twice, the first time fitting the pooled effects
 # model, the second time fitting the varying intercepts and slopes model
 
 
@@ -93,7 +93,7 @@ for(i in 1:length(data.files)) {
         data.files[i] %>%
           str_replace("dat.f", "model.f.v") %>%
           str_replace(".stan", ""),
-        # names for pooled effect models
+        # names for pooled effects models
         data.files[i] %>%
           str_replace("dat.f", "model.f") %>%
           str_replace(".stan", "")
