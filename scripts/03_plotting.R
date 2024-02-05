@@ -41,7 +41,7 @@ for (model.name in model.names) {
   # Load fit model
   assign(
     model.name, 
-    readRDS(paste0("stan/saved_models_alt/", model.name, ".rds"))
+    readRDS(paste0("stan/saved_models/", model.name, ".rds"))
   )
   
   # Generate processed model with a subset of parameters in data frame format
@@ -120,7 +120,8 @@ plot1 <- dat.f.trim %>%
   filter(binomial %in% species.to.keep) %>%
   ggplot(aes(x = pregnant_mod, y = virus_detected)) +
   coord_cartesian(xlim = c(-0.2, 1.2), ylim = c(0, 0.20)) +
-  xlab("") + ylab("Observed Viral Detection Probability") +
+  xlab("") + 
+  ylab("Observed Viral Detection Probability") +
   scale_x_continuous(
     labels = c("Not Pregnant", "Pregnant"), 
     breaks = c(0, 1)
@@ -176,7 +177,8 @@ plot2 <- dat.f.trim %>%
   filter(binomial %in% species.to.keep) %>%
   ggplot(aes(x = lactating_mod, y = virus_detected)) +
   coord_cartesian(xlim = c(-0.2, 1.2), ylim = c(0, 0.20)) +
-  xlab("") + ylab("Observed Viral Detection Probability") +
+  xlab("") + 
+  ylab("Observed Viral Detection Probability") +
   scale_x_continuous(
     labels = c("Not Lactating", "Lactating"), 
     breaks = c(0, 1)
@@ -232,9 +234,10 @@ model.colors <- c("black", "deepskyblue3", "darkseagreen4",
 
 pars <- c("mu_alpha", "beta_pregnant_mod", "beta_lactating_mod")
 bracket <- 
-  list(c("Reproductive Effects on Viral Detection", 
-         "Pregnancy Effect", 
-         "Lactation Effect")
+  list(
+    c("Reproductive Effects on Viral Detection", 
+      "Pregnancy Effect", 
+      "Lactation Effect")
   )
 
 # Generate a data frame of parameter means and HPDIs for each relevant
@@ -243,7 +246,7 @@ bracket <-
 tidy.model.output <- data.frame(NULL)
 conf.level <- 0.95
 
-for (model.name in processed.model.names) {
+for (model.name in processed.model.names[1:6]) {
   
   temp.df <- 
     get(model.name) %>%
@@ -275,15 +278,14 @@ for (model.name in processed.model.names) {
 
 helper.data <- dat.f.trim %>%
   group_by(test_requested_viral_family) %>%
-  count()
-
-helper.data <- bind_rows(
-  helper.data, 
-  data.frame(
-    test_requested_viral_family = "All Viral Families", 
-    n = nrow(dat.f.trim)
+  count() %>%
+  bind_rows(
+    ., 
+    data.frame(
+      test_requested_viral_family = "All Viral Families", 
+      n = nrow(dat.f.trim)
+    )
   )
-)
 
 tidy.model.output <- tidy.model.output %>%
   left_join(
@@ -376,11 +378,13 @@ plot_grid(plot1, plot2,
           ncol = 1, scale = c(1, 0.95), rel_heights = c(1, 1.1),
           labels = "auto", label_size = 24)
 
-ggsave("outputs/Fig2.png", width = 8, height = 10, dpi = 350)
+ggsave("outputs/pooled_effects_model/Fig2.png", 
+       width = 8, height = 10, dpi = 350)
 
 plot1
 
-ggsave("outputs/Fig2.png", width = 8, height = 6, dpi = 350)
+ggsave("outputs/pooled_effects_model/Fig2.png", 
+       width = 8, height = 6, dpi = 350)
 
 # What proportion of posterior probability mass supports a negative pregnancy
 # effect for each model?
@@ -396,6 +400,179 @@ sum(model.f.Paramyxoviridae.p$beta_pregnant_mod < 0)/
   nrow(model.f.Paramyxoviridae.p)
 sum(model.f.Polyomaviridae.p$beta_pregnant_mod < 0)/
   nrow(model.f.Polyomaviridae.p)
+
+
+# Replicate analysis and figures for varying slopes model
+
+pars <- c("beta[1]", "beta[2]", "beta[3]")
+bracket <- 
+  list(
+    c("Reproductive Effects on Viral Detection", 
+      "Pregnancy Effect", 
+      "Lactation Effect")
+  )
+
+tidy.model.output <- data.frame(NULL)
+conf.level <- 0.95
+
+for (model.name in processed.model.names[7:12]) {
+  
+  temp.df <- 
+    get(model.name) %>%
+    select(all_of(pars)) %>%
+    # Use precis() to get means and HPDIs
+    precis(., pars = pars, digits = 3, prob = conf.level, depth = 2) %>%
+    data.frame() %>%
+    select(-histogram) %>%
+    mutate(term = rownames(.)) %>%
+    # Rename columns to work easily with the dotwhisker package 
+    rename(
+      estimate = mean,
+      conf.low = X2.5.,
+      conf.high = X97.5.
+    ) %>%
+    select(term, everything()) %>%
+    remove_rownames() %>%
+    # Clean up model names
+    mutate(
+      model = rep(model.name, length(pars)),
+      model = str_replace(model, "model\\.f.v", ""),
+      model = str_replace(model, "\\.p", ""),
+      model = str_replace(model, "\\.", ""),
+      model = ifelse(model == "", "All Viral Families", model)
+    )
+  
+  tidy.model.output <- rbind(tidy.model.output, temp.df)
+}
+
+tidy.model.output <- tidy.model.output %>%
+  left_join(
+    ., helper.data, 
+    by = c("model" = "test_requested_viral_family")
+  ) %>%
+  mutate(model = paste0(model, " (n = ", n, ")"))
+
+models.excluding.all <- 
+  unique(tidy.model.output$model)[!str_detect(unique(tidy.model.output$model), "All Viral Families")]
+all.model <- 
+  unique(tidy.model.output$model)[str_detect(unique(tidy.model.output$model), "All Viral Families")]
+
+tidy.model.output <- tidy.model.output %>%
+  mutate(
+    model = factor(model, levels = c(all.model, models.excluding.all))
+  )
+
+
+plot1 <- {
+  tidy.model.output %>%
+    dotwhisker::relabel_predictors(
+      c(`beta[1]` = "Intercept",
+        `beta[2]` = "Pregnancy Effect",
+        `beta[3]` = "Lactation Effect"
+      )
+    ) %>%
+    dotwhisker::dwplot(
+      dot_args = list(size = 2),
+    ) +
+    custom_theme +
+    xlab("Parameter Estimate") +
+    theme(
+      legend.text = element_text(size = 8),
+      legend.title = element_text(size = 9)
+    ) +
+    geom_vline(xintercept = 0, colour = "black", linetype = 2) +
+    xlim(-10, 5) +
+    scale_color_manual(
+      values = rev(model.colors),
+      name = "Viral Dataset"
+    )
+} %>%
+  dotwhisker::add_brackets(bracket)
+
+plot2 <- model.f.v.p %>%
+  precis(., depth = 3, digits = 3, prob = conf.level) %>%
+  data.frame() %>%
+  select(-histogram) %>%
+  mutate(term = rownames(.)) %>%
+  filter(str_detect(term, "beta_host_species\\[1,")) %>%
+  rename(
+    estimate = mean,
+    conf.low = X2.5.,
+    conf.high = X97.5.
+  ) %>%
+  select(term, everything()) %>%
+  remove_rownames() %>%
+  dotwhisker::dwplot(
+    .,
+    dot_args = list(col = "black"),
+    whisker_args = list(col = alpha("black", 0.8))
+  ) +
+  custom_theme +
+  theme(axis.text.y = element_blank()) +
+  xlab("Parameter Estimate") +
+  geom_vline(xintercept = 0, colour = "black", linetype = 2) +
+  xlim(-10, 1) +
+  ggtitle("Intercepts by Host Species") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+model.f.v.p %>%
+  precis(., depth = 3, digits = 3, prob = conf.level) %>%
+  data.frame() %>%
+  select(-histogram) %>%
+  mutate(term = rownames(.)) %>%
+  filter(str_detect(term, "beta_host_species\\[1,")) %>%
+  rename(
+    estimate = mean,
+    conf.low = X2.5.,
+    conf.high = X97.5.
+  ) %>%
+  select(term, everything()) %>%
+  remove_rownames() %>%
+  mutate(implied_probability = logistic(estimate)) %>%
+  arrange(implied_probability)
+
+
+plot_grid(plot1, plot2, 
+          ncol = 1, scale = c(1, 0.95), rel_heights = c(1, 1.1),
+          labels = "auto", label_size = 24)
+
+ggsave("outputs/varying_slopes_model/Fig2.png", 
+       width = 8, height = 10, dpi = 350)
+
+plot1
+
+ggsave("outputs/varying_slopes_model/Fig2.png", 
+       width = 8, height = 6, dpi = 350)
+
+# What proportion of posterior probability mass supports a negative pregnancy
+# effect for each model?
+sum(model.f.v.p$`beta[2]` < 0)/
+  nrow(model.f.v.p)
+sum(model.f.v.Adenoviridae.p$`beta[2]` < 0)/
+  nrow(model.f.v.Adenoviridae.p)
+sum(model.f.v.Coronaviridae.p$`beta[2]` < 0)/
+  nrow(model.f.v.Coronaviridae.p)
+sum(model.f.v.Herpesviridae.p$`beta[2]` < 0)/
+  nrow(model.f.v.Herpesviridae.p)
+sum(model.f.v.Paramyxoviridae.p$`beta[2]` < 0)/
+  nrow(model.f.v.Paramyxoviridae.p)
+sum(model.f.v.Polyomaviridae.p$`beta[2]` < 0)/
+  nrow(model.f.v.Polyomaviridae.p)
+
+# What proportion of posterior probability mass supports a negative lactation
+# effect for each model?
+sum(model.f.v.p$`beta[3]` < 0)/
+  nrow(model.f.v.p)
+sum(model.f.v.Adenoviridae.p$`beta[3]` < 0)/
+  nrow(model.f.v.Adenoviridae.p)
+sum(model.f.v.Coronaviridae.p$`beta[3]` < 0)/
+  nrow(model.f.v.Coronaviridae.p)
+sum(model.f.v.Herpesviridae.p$`beta[3]` < 0)/
+  nrow(model.f.v.Herpesviridae.p)
+sum(model.f.v.Paramyxoviridae.p$`beta[3]` < 0)/
+  nrow(model.f.v.Paramyxoviridae.p)
+sum(model.f.v.Polyomaviridae.p$`beta[3]` < 0)/
+  nrow(model.f.v.Polyomaviridae.p)
  
 # /*
 #==============================================================================
@@ -411,7 +588,7 @@ samples.per.sim <- 1000
 
 big.sim.df <- data.frame(NULL)
 
-for(x in processed.model.names) {
+for(x in processed.model.names[1:6]) {
   
   dat <- get(x)
   
@@ -422,7 +599,6 @@ for(x in processed.model.names) {
     rep(NA, sims*3)
   )
   colnames(sim.df) <- c("model", "condition", "positives", "detection_prob")
-  sim.df
   
   set.seed(8)
   
@@ -519,7 +695,116 @@ plot +
     arrow = arrow(angle = 20, length = unit(0.1, "inches"), type = "closed")
   )
 
-ggsave("outputs/Fig3.png", height = 5, width = 8, dpi = 350)
+ggsave("outputs/pooled_effects_model/Fig3.png", 
+       height = 5, width = 8, dpi = 350)
+
+
+# Replicate analysis and figure for varying slopes model
+
+big.sim.df <- data.frame(NULL)
+
+for(x in processed.model.names[7:12]) {
+  
+  dat <- get(x)
+  
+  sim.df <- data.frame(
+    rep(x, sims*3),
+    rep(c("Non-reproductive", "Pregnant", "Lactating"), sims),
+    rep(NA, sims*3),
+    rep(NA, sims*3)
+  )
+  colnames(sim.df) <- c("model", "condition", "positives", "detection_prob")
+  
+  set.seed(8)
+  
+  for (i in (1:sims)*3 - 2) {
+    
+    sim.df$positives[i] <-
+      sum(
+        rbinom(samples.per.sim, 
+               prob = sample(logistic(dat$`beta[1]`), samples.per.sim), 
+               size = 1)
+      )
+    
+    sim.df$positives[i + 1] <-
+      sum(
+        rbinom(samples.per.sim, 
+               prob = sample(logistic(dat$`beta[1]` + dat$`beta[2]`), 
+                             samples.per.sim), 
+               size = 1)
+      )
+    
+    sim.df$positives[i + 2] <-
+      sum(
+        rbinom(samples.per.sim, 
+               prob = sample(logistic(dat$`beta[1]` + dat$`beta[3]`),
+                             samples.per.sim), 
+               size = 1)
+      )
+    
+    sim.df$detection_prob[i:(i + 2)] <- sim.df$positives[i:(i + 2)]/samples.per.sim
+  }
+  
+  big.sim.df <- bind_rows(big.sim.df, sim.df)
+}
+
+big.sim.df <- big.sim.df %>%
+  mutate(
+    model = 
+      fct_relevel(model, "model.f.v.p"),
+    condition = 
+      fct_relevel(condition, c("Non-reproductive", "Pregnant", "Lactating"))
+  )
+
+model.labels <- c(
+  model.f.v.p = "All Viral Families",
+  model.f.v.Adenoviridae.p = "Adenoviridae",
+  model.f.v.Coronaviridae.p = "Coronaviridae",
+  model.f.v.Herpesviridae.p = "Herpesviridae",
+  model.f.v.Paramyxoviridae.p = "Paramyxoviridae",
+  model.f.v.Polyomaviridae.p = "Polyomaviridae"
+)
+
+plot <- big.sim.df %>%
+  ggplot(aes(x = condition, y = detection_prob, color = condition)) +
+  geom_jitter(height = 0) +
+  ylab("Predicted Viral Detection Probability") +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    text = element_text(size = 18, color = "black"),
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  ) +
+  scale_color_manual(
+    values = color.values, 
+    name = "Reproductive Condition",
+    aesthetics = c("colour", "fill")
+  ) +
+  facet_wrap(~model, labeller = labeller(model = model.labels), nrow = 1)
+
+summary.data <- big.sim.df %>%
+  group_by(model, condition) %>%
+  summarize(detection_prob = mean(detection_prob)) %>%
+  mutate(x = rep(1:3)) %>%
+  ungroup()
+
+
+plot + 
+  geom_path(
+    data = summary.data, inherit.aes = FALSE,
+    aes(x = x, y = detection_prob),
+    color = alpha("black", 0.8), 
+    linewidth = 0.7,
+    arrow = arrow(angle = 20, length = unit(0.1, "inches"), type = "closed")
+  )
+
+ggsave("outputs/varying_slopes_model/Fig3.png", 
+       height = 5, width = 8, dpi = 350)
 
 # /*
 #==============================================================================
@@ -765,7 +1050,46 @@ p +
     legend.position = "none"
   )
 
-ggsave("outputs/FigS4.png", width = 10, height = 10, dpi = 350)
+ggsave("outputs/pooled_effects_model/FigS4.png", 
+       width = 10, height = 10, dpi = 350)
+
+
+# Replicate for the varying slopes model
+
+p <- bayesplot::mcmc_trace(
+  model.f.v %>% 
+    posterior::as_draws(),
+  pars = c(
+    "beta[1]", "beta[2]", "beta[3]",
+    "sigma_host_species[1]", "sigma_host_species[2]", "sigma_host_species[3]",
+    "sigma_vector[1]", "sigma_vector[2]", "sigma_vector[3]",
+    "sigma_vector[4]", "sigma_vector[5]"
+  ),
+  facet_args = list(ncol = 3)
+)
+
+levels(p$data$parameter) <- c(
+  "Community Intercept", 
+  "Community Pregnancy Effect", "Community Lactation Effect",
+  "σ (Host Species Intercepts)", "σ (Host Species Pregnancy Effects)", 
+  "σ (Host Species Lactation Effects)",
+  "σ (Year)", "σ (Country)", "σ (Specimen Type)", "σ (Viral Test Protocol)", 
+  "σ (Diagnostic Laboratory)"
+)
+
+
+p + 
+  scale_color_viridis(discrete = TRUE, option = "plasma", end = 0.85) +
+  ggtitle("Parameter trace plots for Bayesian model of viral detection in adult female bats") +
+  theme(
+    text = element_text(size = 14, color = "black", family = "sans"),
+    plot.title = element_text(size = 18),
+    strip.text.x = element_text(size = 14, face = "bold"),
+    legend.position = "none"
+  )
+
+ggsave("outputs/varying_slopes_model/FigS4.png", 
+       width = 12, height = 12, dpi = 350)
 
 # /*
 #==============================================================================
@@ -788,8 +1112,7 @@ var.effect.labels <-
     "country" = levels(factor(dat.df$country)),
     "specimen_type_group" = sort(unique(dat.df$specimen_type_group)),
     "test_requested_mod" = sort(unique(dat.df$test_requested_mod)),
-    "diagnostic_laboratory_name" = sort(unique(dat.df$diagnostic_laboratory_name)
-    )
+    "diagnostic_laboratory_name" = sort(unique(dat.df$diagnostic_laboratory_name))
   )
 
 label.df <- read_csv("data/lookup_tables/laboratory_name_cleanup.csv")
@@ -858,6 +1181,191 @@ plotting.list <- list(
   c(-6, -6, -6, -6, -11, -6)
 )
 labs <- c("b", "c", "d", "e", "f", "g")
+
+for (i in 1:length(plotting.list[[1]])) {
+  
+  cols.to.plot <- grep(paste0(plotting.list[[1]][i], "\\["), 
+                       colnames(model.df), value = T)
+  
+  labels <- var.effect.labels[[plotting.list[[1]][i]]]
+  
+  assert_that(length(cols.to.plot) == length(labels))
+  
+  fill.color <- ggplot_build(p)$data[[1]] %>%
+    distinct(fill) %>%
+    slice(i) %>%
+    unlist()
+  
+  png(plotting.list[[2]][i], width = 1000, height = 1200)
+  
+  print(
+    model.df %>% 
+      select(all_of(cols.to.plot)) %>%
+      gather("parameter", "value", cols.to.plot, factor_key = T) %>%
+      mutate(
+        varying_effect_group = gsub("\\[[0-9]+\\]", "", parameter) %>% gsub("alpha_", "", .)
+      ) %>%
+      mutate(parameter = plyr::mapvalues(parameter, cols.to.plot, labels)) %>%
+      # To order the distributions by median values
+      mutate(parameter = reorder(parameter, value, median)) %>%
+      
+      ggplot(aes(x = value, y = parameter, 
+                 height = ..density..)) +
+      xlab("Parameter Value") + ylab(plotting.list[[3]][i]) +
+      geom_density_ridges(fill = fill.color) +
+      coord_cartesian(xlim = c(plotting.list[[4]][i], -1*plotting.list[[4]][i])) +
+      theme_ridges(center_axis_labels = TRUE, font_size = 12) +
+      theme(
+        axis.title = element_text(size = 32),
+        plot.tag = element_text(size = 50, face = "bold"),
+        axis.text.x = element_text(size = 20),
+        axis.text.y = element_text(size = 16)
+      ) +
+      scale_y_discrete(expand = expansion(add = c(0.2, 1.5))) +
+      labs(tag = labs[i])
+  )
+  
+  dev.off()
+}
+
+
+# Replicate for the varying slopes model
+
+dat.df <- dat.f.trim
+model.df <- model.f.v.p
+
+cols.to.plot <- grep("beta_host_species", colnames(model.df), value = T)
+
+labels <- rep(sort(unique(dat.df$binomial)), each = 3)
+names(labels) <- cols.to.plot
+
+varying.intercept.slope.group.labels <- c(
+  "beta_host_species[1" = "Species-Specific Intercept",
+  "beta_host_species[2" = "Species-Specific Pregnancy Effect",
+  "beta_host_species[3" = "Species-Specific Lactation Effect"
+)
+
+# To plot all varying effects
+
+png("outputs/FigS6_v.png", width = 1200, height = 800)
+
+p <- model.df %>% 
+  select(all_of(cols.to.plot)) %>%
+  gather("parameter", "value", cols.to.plot, factor_key = T) %>%
+  mutate(
+    varying_effect_group = gsub(",[0-9]+\\]", "", parameter),
+    varying_effect_group = factor(varying_effect_group, names(varying.intercept.slope.group.labels))
+  ) %>%
+  # To order the distributions by median values
+  mutate(parameter = reorder(parameter, value, median)) %>%
+  mutate(host_species = plyr::mapvalues(parameter, cols.to.plot, labels)) %>%
+  
+  ggplot(aes(x = value, y = parameter, 
+             height = ..density.., fill = varying_effect_group)) +
+  xlab("Parameter Value") + ylab("") +
+  geom_density_ridges() +
+  scale_y_discrete(labels = labels) +
+  # To facet by varying effects group
+  facet_wrap(
+    ~varying_effect_group, scale = "free", 
+    labeller = labeller(
+      varying_effect_group = varying.intercept.slope.group.labels
+    )
+  ) +
+  theme_ridges(center_axis_labels = TRUE, font_size = 16) +
+  # To remove y-axis labels
+  theme(
+    axis.text.x = element_text(size = 20),
+    axis.title = element_text(size = 32),
+    legend.position = "none",
+    strip.background = element_blank(),
+    strip.text.x = element_text(size = 18, face = "bold", margin = margin(b = 5))
+  ) +
+  coord_cartesian(clip = "off")
+
+p
+
+dev.off()
+
+
+cols.to.plot <- grep("alpha", colnames(model.df), value = T) %>%
+  grep("mu_|tilde|species\\[", ., value = T, invert = T)
+
+var.effect.labels <- 
+  list(
+    "year" = levels(factor(dat.df$year)),
+    "country" = levels(factor(dat.df$country)),
+    "specimen_type_group" = sort(unique(dat.df$specimen_type_group)),
+    "test_requested_mod" = sort(unique(dat.df$test_requested_mod)),
+    "diagnostic_laboratory_name" = sort(unique(dat.df$diagnostic_laboratory_name))
+  )
+
+label.df <- read_csv("data/lookup_tables/laboratory_name_cleanup.csv")
+
+indexes <- 
+  match(var.effect.labels$diagnostic_laboratory_name, label.df$diagnostic_laboratory_name)
+
+var.effect.labels$diagnostic_laboratory_name <- 
+  label.df$diagnostic_laboratory_name_mod[indexes]
+
+assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
+
+
+# To plot all varying effects
+
+png("outputs/FigS6a_v.png", width = 1200, height = 800)
+
+p <- model.df %>% 
+  select(all_of(cols.to.plot)) %>%
+  gather("parameter", "value", cols.to.plot, factor_key = T) %>%
+  mutate(
+    varying_effect_group = gsub("\\[[0-9]+\\]", "", parameter) %>% gsub("alpha_", "", .),
+    varying_effect_group = factor(varying_effect_group, names(var.effect.group.labels))
+  ) %>%
+  # To order the distributions by median values
+  mutate(parameter = reorder(parameter, value, median)) %>%
+  
+  ggplot(aes(x = value, y = parameter, 
+             height = ..density.., fill = varying_effect_group)) +
+  xlab("Parameter Value") + ylab("Varying Intercepts Cluster") +
+  geom_density_ridges() +
+  xlim(-11, 11) +
+  # To facet by varying effects group
+  facet_wrap(~varying_effect_group, scale = "free_y", 
+             labeller = as_labeller(var.effect.group.labels)) +
+  theme_ridges(center_axis_labels = TRUE, font_size = 16) +
+  # To remove y-axis labels
+  theme(
+    axis.text.x = element_text(size = 20),
+    axis.text.y = element_blank(), 
+    axis.title = element_text(size = 32),
+    plot.tag = element_text(size = 50, face = "bold"),
+    legend.position = "none",
+    strip.background = element_blank(),
+    strip.text.x = element_text(size = 18, face = "bold", margin = margin(b = 5))
+  ) +
+  coord_cartesian(clip = "off") +
+  labs(tag = "a")
+
+p
+
+dev.off()
+
+
+# To plot varying effects one at a time
+
+plotting.list <- list(
+  c("year", "country",
+    "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
+  c("outputs/FigS6b_v.png", "outputs/FigS6c_v.png", "outputs/FigS6d_v.png", 
+    "outputs/FigS6e_v.png", "outputs/FigS6f_v.png"),
+  c("Year of Sample Collection",
+    "Country of Sample Collection", "Specimen Type", 
+    "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
+  ),
+  c(-6, -6, -6, -11, -6)
+)
+labs <- c("b", "c", "d", "e", "f")
 
 for (i in 1:length(plotting.list[[1]])) {
   
@@ -981,6 +1489,7 @@ viral.family.preds <- d.preds %>%
 plot.data <- viral.family.preds %>%
   group_by(viral_family, n) %>%
   mutate(
+    mean = mean(positivity),
     lower.95 = HPDI(positivity, prob = 0.95)[1],
     upper.95 = HPDI(positivity, prob = 0.95)[2],
     lower.50 = HPDI(positivity, prob = 0.5)[1],
@@ -994,7 +1503,8 @@ plot.data <- viral.family.preds %>%
       viral_family,
       "All Data\n(n = 9694)"
     )
-  )
+  ) %>%
+  select(-c(iteration, n, n_positive, positivity))
 
 # Get analogous test positivity metrics for the observed data
 full.dataset.obs <- dat.f.trim %>%
@@ -1025,9 +1535,21 @@ viral.family.obs <- dat.f.trim %>%
     )
   )
 
+plot.data <- plot.data %>%
+  left_join(
+    ., viral.family.obs,
+    by = "viral_family"
+  ) %>%
+  mutate(
+    in_50_interval = ifelse(
+      positivity <= upper.50 & positivity >= lower.50,
+      TRUE, FALSE
+    )
+  )
+
 # Plot and save
 plot.data %>%
-  ggplot(aes(x = viral_family, y = positivity)) +
+  ggplot(aes(x = viral_family)) +
   geom_linerange(
     aes(ymin = lower.95, ymax = upper.95), 
     linewidth = 1, color = "darkgrey"
@@ -1037,8 +1559,8 @@ plot.data %>%
     linewidth = 4, color = "darkgrey"
   ) +
   geom_point(
-    data = viral.family.obs, color = "darkred",
-    size = 2
+    aes(y = positivity), 
+    size = 2, color = "darkred"
   ) +
   geom_vline(xintercept = 1.5, lty = 2) +
   ylab("Test positivity") +
@@ -1052,3 +1574,132 @@ plot.data %>%
   )
 
 ggsave("outputs/FigS5.png", height = 5, width = 10, dpi = 350)
+
+
+# Replicate for the varying slopes model
+
+# Generate data frame of all alpha values from the full fit model
+d.preds <- model.f.v %>%
+  posterior::as_draws_df() %>%
+  select(contains("alpha")) %>%
+  select(!contains("_")) 
+
+# How many iterations total?
+n.iter <- dim(d.preds)[1]
+
+# How many data points total?
+n.datapoints <- dim(d.preds)[2]
+
+# Pivot the alpha matrix such that we get a data frame with columns for
+# the model iteration, data point, and probability of success
+d.preds <- d.preds %>%
+  tidyr::pivot_longer(
+    cols = contains("alpha"),
+    names_to = "data point",
+    values_to = "alpha"
+  ) %>%
+  mutate(
+    iteration = rep(1:n.iter, each = n.datapoints),
+    prob = logistic(alpha)
+  )
+
+set.seed(1)
+
+# Generate 0/1 predictions for each data point/iteration combination using
+# the modeled probability of success
+d.preds$pred <- rbinom(
+  n = length(d.preds$prob), 
+  size = 1, 
+  prob = d.preds$prob
+)
+
+# Record the test requested viral family for each observation
+d.preds$viral_family <- rep(
+  dat.f.trim$test_requested_viral_family,
+  times = n.iter
+)
+
+# Summarize the predictions (across all viral families) to generate metrics
+# of test positivity
+full.dataset.preds <- d.preds %>%
+  group_by(iteration) %>%
+  summarize(
+    n = n(),
+    n_positive = sum(pred),
+    positivity = n_positive/n
+  ) %>%
+  ungroup() %>%
+  mutate(viral_family = rep("All Data", times = n()))
+
+# Summarize the predictions by viral family to generate metrics
+# of test positivity and bind in the all viral families data
+viral.family.preds <- d.preds %>%
+  group_by(viral_family, iteration) %>%
+  summarize(
+    n = n(),
+    n_positive = sum(pred),
+    positivity = n_positive/n
+  ) %>%
+  ungroup() %>%
+  bind_rows(full.dataset.preds)
+
+# Summarize test positivity predictions using HPDIs
+plot.data <- viral.family.preds %>%
+  group_by(viral_family, n) %>%
+  mutate(
+    mean = mean(positivity),
+    lower.95 = HPDI(positivity, prob = 0.95)[1],
+    upper.95 = HPDI(positivity, prob = 0.95)[2],
+    lower.50 = HPDI(positivity, prob = 0.5)[1],
+    upper.50 = HPDI(positivity, prob = 0.5)[2]
+  ) %>%
+  slice(1) %>%
+  ungroup() %>%
+  mutate(
+    viral_family = paste0(viral_family, "\n(n = ", n, ")"),
+    viral_family = fct_relevel(
+      viral_family,
+      "All Data\n(n = 9694)"
+    )
+  ) %>%
+  select(-c(iteration, n, n_positive, positivity))
+
+plot.data <- plot.data %>%
+  left_join(
+    ., viral.family.obs,
+    by = "viral_family"
+  ) %>%
+  mutate(
+    in_50_interval = ifelse(
+      positivity <= upper.50 & positivity >= lower.50,
+      TRUE, FALSE
+    )
+  )
+
+# Plot and save
+plot.data %>%
+  ggplot(aes(x = viral_family)) +
+  geom_linerange(
+    aes(ymin = lower.95, ymax = upper.95), 
+    linewidth = 1, color = "darkgrey"
+  ) +
+  geom_linerange(
+    aes(ymin = lower.50, ymax = upper.50), 
+    linewidth = 4, color = "darkgrey"
+  ) +
+  geom_point(
+    aes(y = positivity),
+    size = 2, color = "darkred"
+  ) +
+  geom_vline(xintercept = 1.5, lty = 2) +
+  ylab("Test positivity") +
+  xlab("") +
+  ylim(0, 0.2) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    axis.title.y = element_text(size = 16),
+    axis.text.x = element_text(face = "bold")
+  )
+
+ggsave("outputs/FigS5_v.png", height = 5, width = 10, dpi = 350)
