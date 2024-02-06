@@ -251,19 +251,15 @@ for (model.name in processed.model.names[1:6]) {
   temp.df <- 
     get(model.name) %>%
     select(all_of(pars)) %>%
-    # Use precis() to get means and HPDIs
-    precis(., pars = pars, digits = 3, prob = conf.level) %>%
-    data.frame() %>%
-    select(-histogram) %>%
-    mutate(term = rownames(.)) %>%
-    # Rename columns to work easily with the dotwhisker package 
-    rename(
-      estimate = mean,
-      conf.low = X2.5.,
-      conf.high = X97.5.
+    # Get means and HPDIs
+    tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+    group_by(term) %>%
+    summarize(
+      estimate = mean(value),
+      conf.low = HPDI(value, prob = conf.level)[1],
+      conf.high = HPDI(value, prob = conf.level)[2]
     ) %>%
-    select(term, everything()) %>%
-    remove_rownames() %>%
+    ungroup() %>%
     # Clean up model names
     mutate(
       model = rep(model.name, length(pars)),
@@ -332,18 +328,15 @@ plot1 <- {
   dotwhisker::add_brackets(bracket)
 
 plot2 <- model.f.p %>%
-  precis(., depth = 2, digits = 3, prob = conf.level) %>%
-  data.frame() %>%
-  select(-histogram) %>%
-  mutate(term = rownames(.)) %>%
-  filter(str_detect(term, "alpha_host_species\\[")) %>%
-  rename(
-    estimate = mean,
-    conf.low = X2.5.,
-    conf.high = X97.5.
+  select(matches("alpha_host_species\\[")) %>%
+  tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+  group_by(term) %>%
+  summarize(
+    estimate = mean(value),
+    conf.low = HPDI(value, prob = conf.level)[1],
+    conf.high = HPDI(value, prob = conf.level)[2]
   ) %>%
-  select(term, everything()) %>%
-  remove_rownames() %>%
+  ungroup() %>%
   dotwhisker::dwplot(
     .,
     dot_args = list(col = "black"),
@@ -358,18 +351,15 @@ plot2 <- model.f.p %>%
   theme(plot.title = element_text(hjust = 0.5))
 
 model.f.p %>%
-  precis(., depth = 2, digits = 3, prob = conf.level) %>%
-  data.frame() %>%
-  select(-histogram) %>%
-  mutate(term = rownames(.)) %>%
-  filter(str_detect(term, "alpha_host_species\\[")) %>%
-  rename(
-    estimate = mean,
-    conf.low = X2.5.,
-    conf.high = X97.5.
+  select(matches("alpha_host_species\\[")) %>%
+  tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+  group_by(term) %>%
+  summarize(
+    estimate = mean(value),
+    conf.low = HPDI(value, prob = conf.level)[1],
+    conf.high = HPDI(value, prob = conf.level)[2]
   ) %>%
-  select(term, everything()) %>%
-  remove_rownames() %>%
+  ungroup() %>%
   mutate(implied_probability = logistic(estimate)) %>%
   arrange(implied_probability)
 
@@ -417,22 +407,18 @@ conf.level <- 0.95
 
 for (model.name in processed.model.names[7:12]) {
   
-  temp.df <- 
+  temp.df <-
     get(model.name) %>%
     select(all_of(pars)) %>%
-    # Use precis() to get means and HPDIs
-    precis(., pars = pars, digits = 3, prob = conf.level, depth = 2) %>%
-    data.frame() %>%
-    select(-histogram) %>%
-    mutate(term = rownames(.)) %>%
-    # Rename columns to work easily with the dotwhisker package 
-    rename(
-      estimate = mean,
-      conf.low = X2.5.,
-      conf.high = X97.5.
+    # Get means and HPDIs
+    tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+    group_by(term) %>%
+    summarize(
+      estimate = mean(value),
+      conf.low = HPDI(value, prob = conf.level)[1],
+      conf.high = HPDI(value, prob = conf.level)[2]
     ) %>%
-    select(term, everything()) %>%
-    remove_rownames() %>%
+    ungroup() %>%
     # Clean up model names
     mutate(
       model = rep(model.name, length(pars)),
@@ -490,18 +476,15 @@ plot1 <- {
   dotwhisker::add_brackets(bracket)
 
 plot2 <- model.f.v.p %>%
-  precis(., depth = 3, digits = 3, prob = conf.level) %>%
-  data.frame() %>%
-  select(-histogram) %>%
-  mutate(term = rownames(.)) %>%
-  filter(str_detect(term, "beta_host_species\\[1,")) %>%
-  rename(
-    estimate = mean,
-    conf.low = X2.5.,
-    conf.high = X97.5.
+  select(matches("beta_host_species\\[1")) %>%
+  tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+  group_by(term) %>%
+  summarize(
+    estimate = mean(value),
+    conf.low = HPDI(value, prob = conf.level)[1],
+    conf.high = HPDI(value, prob = conf.level)[2]
   ) %>%
-  select(term, everything()) %>%
-  remove_rownames() %>%
+  ungroup() %>%
   dotwhisker::dwplot(
     .,
     dot_args = list(col = "black"),
@@ -516,18 +499,15 @@ plot2 <- model.f.v.p %>%
   theme(plot.title = element_text(hjust = 0.5))
 
 model.f.v.p %>%
-  precis(., depth = 3, digits = 3, prob = conf.level) %>%
-  data.frame() %>%
-  select(-histogram) %>%
-  mutate(term = rownames(.)) %>%
-  filter(str_detect(term, "beta_host_species\\[1,")) %>%
-  rename(
-    estimate = mean,
-    conf.low = X2.5.,
-    conf.high = X97.5.
+  select(matches("beta_host_species\\[1")) %>%
+  tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+  group_by(term) %>%
+  summarize(
+    estimate = mean(value),
+    conf.low = HPDI(value, prob = conf.level)[1],
+    conf.high = HPDI(value, prob = conf.level)[2]
   ) %>%
-  select(term, everything()) %>%
-  remove_rownames() %>%
+  ungroup() %>%
   mutate(implied_probability = logistic(estimate)) %>%
   arrange(implied_probability)
 
