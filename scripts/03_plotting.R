@@ -1128,7 +1128,7 @@ assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 # To plot all varying effects
 
-png("outputs/FigS6a.png", width = 1200, height = 800)
+png("outputs/pooled_effects_model/FigS6a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1172,8 +1172,9 @@ dev.off()
 plotting.list <- list(
   c("host_species_offset", "year", "country",
     "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
-  c("outputs/FigS6b.png", "outputs/FigS6c.png", "outputs/FigS6d.png", 
-    "outputs/FigS6e.png", "outputs/FigS6f.png", "outputs/FigS6g.png"),
+  c("outputs/pooled_effects_model/FigS6b.png", "outputs/pooled_effects_model/FigS6c.png",
+    "outputs/pooled_effects_model/FigS6d.png", "outputs/pooled_effects_model/FigS6e.png", 
+    "outputs/pooled_effects_model/FigS6f.png", "outputs/pooled_effects_model/FigS6g.png"),
   c("Host Species", "Year of Sample Collection",
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
@@ -1240,14 +1241,15 @@ labels <- rep(sort(unique(dat.df$binomial)), each = 3)
 names(labels) <- cols.to.plot
 
 varying.intercept.slope.group.labels <- c(
-  "beta_host_species[1" = "Species-Specific Intercept",
-  "beta_host_species[2" = "Species-Specific Pregnancy Effect",
-  "beta_host_species[3" = "Species-Specific Lactation Effect"
-)
+  "beta_host_species[1" = "Species-Specific Intercepts",
+  "beta_host_species[2" = "Species-Specific Pregnancy Effects",
+  "beta_host_species[3" = "Species-Specific Lactation Effects"
+) 
 
-# To plot all varying effects
 
-png("outputs/FigS6_v.png", width = 1200, height = 800)
+# To plot all varying intercepts and slopes by species
+
+png("outputs/varying_slopes_model/FigS6.png", width = 1500, height = 1500)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1276,6 +1278,7 @@ p <- model.df %>%
   # To remove y-axis labels
   theme(
     axis.text.x = element_text(size = 20),
+    axis.text.y = element_text(face = "italic"),
     axis.title = element_text(size = 32),
     legend.position = "none",
     strip.background = element_blank(),
@@ -1286,6 +1289,62 @@ p <- model.df %>%
 p
 
 dev.off()
+
+
+# To plot varying intercepts and slopes by species one at a time
+
+plotting.list <- list(
+  c("beta_host_species\\[1", "beta_host_species\\[2", "beta_host_species\\[3"),
+  c("outputs/varying_slopes_model/FigS6a.png", "outputs/varying_slopes_model/FigS6b.png", 
+    "outputs/varying_slopes_model/FigS6c.png"),
+  c("Species-Specific Intercepts", "Species-Specific Pregnancy Effects",
+    "Species-Specific Lactation Effects"),
+  c(c(-12, 2), c(-4, 2), c(-5, 3))
+)
+labs <- c("a", "b", "c")
+
+for (i in 1:length(plotting.list[[1]])) {
+  
+  cols.to.plot.sub <- grep(plotting.list[[1]][i], colnames(model.df), value = T)
+  
+  fill.color <- ggplot_build(p)$data[[1]] %>%
+    distinct(fill) %>%
+    slice(i) %>%
+    unlist()
+  
+  png(plotting.list[[2]][i], width = 1000, height = 1500)
+  
+  print(
+    model.df %>% 
+      select(all_of(cols.to.plot)) %>%
+      gather("parameter", "value", cols.to.plot, factor_key = T) %>%
+      mutate(
+        varying_effect_group = gsub(",[0-9]+\\]", "", parameter),
+        varying_effect_group = factor(varying_effect_group, names(varying.intercept.slope.group.labels))
+      ) %>%
+      # To order the distributions by median values
+      mutate(parameter = reorder(parameter, value, median)) %>%
+      mutate(host_species = plyr::mapvalues(parameter, cols.to.plot, labels)) %>%
+      filter(parameter %in% cols.to.plot.sub) %>%
+      
+      ggplot(aes(x = value, y = parameter, 
+                 height = ..density..)) +
+      xlab("Parameter Value") + ylab(plotting.list[[3]][i]) +
+      geom_density_ridges(fill = fill.color) +
+      coord_cartesian(xlim = c(plotting.list[[4]][i*2-1], plotting.list[[4]][i*2])) +
+      theme_ridges(center_axis_labels = TRUE, font_size = 12) +
+      theme(
+        axis.title = element_text(size = 32),
+        plot.tag = element_text(size = 50, face = "bold"),
+        axis.text.x = element_text(size = 20),
+        axis.text.y = element_text(size = 16, face = "italic")
+      ) +
+      scale_y_discrete(labels = labels, expand = expansion(add = c(0.2, 1.5))) +
+      labs(tag = labs[i])
+  )
+  
+  dev.off()
+}
 
 
 cols.to.plot <- grep("alpha", colnames(model.df), value = T) %>%
@@ -1311,9 +1370,9 @@ var.effect.labels$diagnostic_laboratory_name <-
 assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 
-# To plot all varying effects
+# To plot all other varying effects
 
-png("outputs/FigS6a_v.png", width = 1200, height = 800)
+png("outputs/varying_slopes_model/FigS7a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1352,13 +1411,14 @@ p
 dev.off()
 
 
-# To plot varying effects one at a time
+# To plot other varying effects one at a time
 
 plotting.list <- list(
   c("year", "country",
     "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
-  c("outputs/FigS6b_v.png", "outputs/FigS6c_v.png", "outputs/FigS6d_v.png", 
-    "outputs/FigS6e_v.png", "outputs/FigS6f_v.png"),
+  c("outputs/varying_slopes_model/FigS7b.png", "outputs/varying_slopes_model/FigS7c.png",
+    "outputs/varying_slopes_model/FigS7d.png", "outputs/varying_slopes_model/FigS7e.png", 
+    "outputs/varying_slopes_model/FigS7f.png"),
   c("Year of Sample Collection",
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
@@ -1573,7 +1633,8 @@ plot.data %>%
     axis.text.x = element_text(face = "bold")
   )
 
-ggsave("outputs/FigS5.png", height = 5, width = 10, dpi = 350)
+ggsave("outputs/pooled_effects_model/FigS5.png", 
+       height = 5, width = 10, dpi = 350)
 
 
 # Replicate for the varying slopes model
@@ -1702,4 +1763,5 @@ plot.data %>%
     axis.text.x = element_text(face = "bold")
   )
 
-ggsave("outputs/FigS5_v.png", height = 5, width = 10, dpi = 350)
+ggsave("outputs/varying_slopes_model/FigS5.png", 
+       height = 5, width = 10, dpi = 350)
