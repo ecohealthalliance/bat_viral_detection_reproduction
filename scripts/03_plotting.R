@@ -73,7 +73,7 @@ for (model.name in model.names) {
     print()
 }
 
-# Load labelling info
+# Load labeling info
 
 var.effect.group.labels <- c(
   "host_species_offset" = "Host Species",
@@ -782,6 +782,93 @@ plot +
     linewidth = 0.7,
     arrow = arrow(angle = 20, length = unit(0.1, "inches"), type = "closed")
   )
+
+ggsave("outputs/varying_slopes_model/Fig3.png", 
+       height = 5, width = 8, dpi = 350)
+
+
+# Alternate plot for varying slopes model
+
+big.df <- data.frame(NULL)
+
+for(x in processed.model.names[7:12]) {
+  
+  dat <- get(x)
+  
+  temp.df <- data.frame(
+    rep(x, nrow(dat)*3),
+    rep(c("Non-reproductive", "Pregnant", "Lactating"), each = nrow(dat))
+  )
+  colnames(temp.df) <- c("model", "condition")
+  
+  temp.df$value <- c(
+    logistic(dat$`beta[1]`),
+    logistic(dat$`beta[1]` + dat$`beta[2]`), 
+    logistic(dat$`beta[1]` + dat$`beta[3]`)
+  )
+  
+  temp.df <- temp.df %>%
+    group_by(model, condition) %>%
+    summarize(
+      mean = mean(value),
+      median = median(value),
+      mode = chainmode(value),
+      lower_50 = HPDI(value, prob = 0.5)[1],
+      upper_50 = HPDI(value, prob = 0.5)[2],
+      lower_70 = HPDI(value, prob = 0.7)[1],
+      upper_70 = HPDI(value, prob = 0.7)[2],
+      lower_80 = HPDI(value, prob = 0.8)[1],
+      upper_80 = HPDI(value, prob = 0.8)[2],
+      lower_90 = HPDI(value, prob = 0.9)[1],
+      upper_90 = HPDI(value, prob = 0.9)[2],
+      lower_99 = HPDI(value, prob = 0.99)[1],
+      upper_99 = HPDI(value, prob = 0.99)[2]
+    ) %>%
+    ungroup()
+
+  big.df <- bind_rows(big.df, temp.df)
+}
+
+big.df <- big.df %>%
+  mutate(
+    model = 
+      fct_relevel(model, "model.f.v.p"),
+    condition = 
+      fct_relevel(condition, c("Non-reproductive", "Pregnant", "Lactating"))
+  ) %>%
+  arrange(model, condition) %>%
+  mutate(x = rep(1:3, times = 6))
+
+big.df %>%
+  ggplot(aes(x = condition, y = mode, color = condition)) +
+  geom_point(size = 3) +
+  geom_path(
+    inherit.aes = FALSE, 
+    aes(x = x, y = mode),
+    color = "black", 
+    linewidth = 0.3
+  ) +
+  geom_point(size = 3) +
+  geom_linerange(aes(ymin = lower_80, ymax = upper_80), linewidth = 0.5) +
+  geom_linerange(aes(ymin = lower_50, ymax = upper_50), linewidth = 1.5) +
+  ylab("Predicted Viral Detection Probability") +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    text = element_text(size = 18, color = "black"),
+    strip.text = element_text(size = 10, face = "bold"),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  ) +
+  scale_color_manual(
+    values = color.values, 
+    name = "Reproductive Condition",
+    aesthetics = c("colour", "fill")
+  ) +
+  facet_wrap(~model, labeller = labeller(model = model.labels), nrow = 1)
 
 ggsave("outputs/varying_slopes_model/Fig3.png", 
        height = 5, width = 8, dpi = 350)

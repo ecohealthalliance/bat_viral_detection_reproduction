@@ -55,11 +55,11 @@ parameters {
   vector<lower=0>[3] sigma_host_species; // sd for the species-specific int/preg/lac effects
   matrix[3, N_host_species] z; // matrix of standardized int/preg/lac offsets
   
-  vector[N_year] alpha_year;
-  vector[N_country] alpha_country;
-  vector[N_specimen_type_group] alpha_specimen_type_group;
-  vector[N_test_requested_mod] alpha_test_requested_mod;
-  vector[N_diagnostic_laboratory_name] alpha_diagnostic_laboratory_name;
+  vector[N_year] alpha_year_tilde;
+  vector[N_country] alpha_country_tilde;
+  vector[N_specimen_type_group] alpha_specimen_type_group_tilde;
+  vector[N_test_requested_mod] alpha_test_requested_mod_tilde;
+  vector[N_diagnostic_laboratory_name] alpha_diagnostic_laboratory_name_tilde;
   
   vector<lower=0>[5] sigma_vector;
 }
@@ -84,9 +84,48 @@ transformed parameters {
     beta_host_species[3, i] = beta[3] + z_s[3, i]; // build lactation effect
   }
   
+  // transform non-centered varying effects
+  
+  vector[N_year] alpha_year;
+  vector[N_country] alpha_country;
+  vector[N_specimen_type_group] alpha_specimen_type_group;
+  vector[N_test_requested_mod] alpha_test_requested_mod;
+  vector[N_diagnostic_laboratory_name] alpha_diagnostic_laboratory_name;
+  
+  for (i in 1:N_year) {
+   
+    alpha_year[i] = 
+    sigma_vector[1] * alpha_year_tilde[i];
+  }
+  
+  for (i in 1:N_country) {
+    
+    alpha_country[i] = 
+    sigma_vector[2] * alpha_country_tilde[i];
+  }
+    
+  for (i in 1:N_specimen_type_group) {
+   
+    alpha_specimen_type_group[i] = 
+    sigma_vector[3] * alpha_specimen_type_group_tilde[i];
+  }
+  
+  for (i in 1:N_test_requested_mod) {
+    
+    alpha_test_requested_mod[i] = 
+    sigma_vector[4] * alpha_test_requested_mod_tilde[i];
+  }
+    
+  for (i in 1:N_diagnostic_laboratory_name) {
+    
+    alpha_diagnostic_laboratory_name[i] = 
+    sigma_vector[5] * alpha_diagnostic_laboratory_name_tilde[i];
+  }
+  
   // calculate overall linear predictor
   
   vector[N] alpha;
+  
   for (i in 1:N) {
       
     alpha[i] = 
@@ -127,11 +166,11 @@ model {
   sigma_host_species ~ exponential(1);
   to_vector(z) ~ normal(0, 1);
   
-  alpha_year ~ normal(0, 1);
-  alpha_country ~ normal(0, 1);
-  alpha_specimen_type_group~ normal(0, 1);
-  alpha_test_requested_mod ~ normal(0, 1);
-  alpha_diagnostic_laboratory_name ~ normal(0, 1);
+  alpha_year_tilde ~ normal(0, 1);
+  alpha_country_tilde ~ normal(0, 1);
+  alpha_specimen_type_group_tilde ~ normal(0, 1);
+  alpha_test_requested_mod_tilde ~ normal(0, 1);
+  alpha_diagnostic_laboratory_name_tilde ~ normal(0, 1);
    
   sigma_vector ~ exponential(1);
   
@@ -146,6 +185,7 @@ model {
 generated quantities {
   
   // output correlation matrix for intercept and slope parameters
+  
   matrix[3, 3] Omega;
   Omega = multiply_lower_tri_self_transpose(L_Omega);
 }
