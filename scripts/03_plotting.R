@@ -851,7 +851,7 @@ big.df %>%
   geom_point(size = 3) +
   geom_linerange(aes(ymin = lower_80, ymax = upper_80), linewidth = 0.5) +
   geom_linerange(aes(ymin = lower_50, ymax = upper_50), linewidth = 1.5) +
-  ylab("Predicted Viral Detection Probability") +
+  ylab("Estimated Viral Detection Probability") +
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
