@@ -47,12 +47,12 @@ dataset.model.link <-
     "stan/model_code/bat_reproduction.stan",
     "stan/model_code/bat_reproduction_no_test_variation.stan",
     "stan/model_code/bat_reproduction.stan",
-    "stan/model_code/varying_ints_slopes_centered.stan",
-    "stan/model_code/varying_ints_slopes_centered.stan",
-    "stan/model_code/varying_ints_slopes_centered.stan",
-    "stan/model_code/varying_ints_slopes_centered.stan",
-    "stan/model_code/varying_ints_slopes_centered_no_test_variation.stan",
-    "stan/model_code/varying_ints_slopes_centered.stan"
+    "stan/model_code/varying_ints_slopes_non_centered.stan",
+    "stan/model_code/varying_ints_slopes_non_centered.stan",
+    "stan/model_code/varying_ints_slopes_non_centered.stan",
+    "stan/model_code/varying_ints_slopes_non_centered.stan",
+    "stan/model_code/varying_ints_slopes_non_centered_no_test_variation.stan",
+    "stan/model_code/varying_ints_slopes_non_centered.stan"
   )
 
 assert_that(length(data.files) == length(dataset.model.link))
