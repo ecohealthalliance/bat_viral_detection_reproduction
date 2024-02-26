@@ -4,10 +4,10 @@
 .Ruserdata
 *.DS_Store
 
-data/cleaned_data
+data/cleaned_data/dat.f.rds
 data/p1_extracts
 docs
-outputs
 scripts/scraps.R
-stan/*/*
+stan/model_code
 !stan/model_code/*.stan
+stan/saved_models
