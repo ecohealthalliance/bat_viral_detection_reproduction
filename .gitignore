@@ -8,6 +8,6 @@ data/cleaned_data/dat.f.rds
 data/p1_extracts
 docs
 scripts/scraps.R
-stan/model_code
+stan/model_code/*
 !stan/model_code/*.stan
 stan/saved_models
