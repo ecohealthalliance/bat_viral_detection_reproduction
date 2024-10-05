@@ -359,6 +359,27 @@ table(dat.f$pregnant_mod, useNA = "ifany")
 table(dat.f$lactating_mod, useNA = "ifany")
 
 
+# Generate reproductive season variable
+
+repro.season.table <- d.bat %>%
+  filter(
+    animal_classification == "Wild",
+    sex == "Female"
+  ) %>%
+  group_by(species_scientific_name, country, month) %>%
+  summarize(
+    pregnancy_activity = sum(pregnant_mod, na.rm = TRUE),
+    lactation_activity = sum(lactating_mod, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    reproductive_season = ifelse(
+      pregnancy_activity > 0 | lactation_activity > 0, 1, 0
+    )
+  ) %>%
+  select(-pregnancy_activity, -lactation_activity)
+
+
 # Save cleaned data
 
 saveRDS(dat.f, file = "data/cleaned_data/dat.f.rds")
