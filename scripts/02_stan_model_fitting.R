@@ -25,7 +25,7 @@ library(assertthat)
 
 # Get data files
 
-data.files <- rep(list.files("stan/cleaned_data/"), times = 2)
+data.files <- rep(list.files("stan/cleaned_data/"), times = 3)
 
 
 # Set Stan model parameters
@@ -41,23 +41,20 @@ stepsize <- 0.5
 
 dataset.model.link <-
   c(
-    "stan/model_code/bat_reproduction.stan",
-    "stan/model_code/bat_reproduction.stan",
-    "stan/model_code/bat_reproduction.stan",
-    "stan/model_code/bat_reproduction.stan",
-    "stan/model_code/bat_reproduction_no_test_variation.stan",
-    "stan/model_code/bat_reproduction.stan",
+    "stan/model_code/main_effects.stan",
+    "stan/model_code/main_effects.stan",
+    "stan/model_code/main_effects.stan",
+    "stan/model_code/varying_ints.stan",
+    "stan/model_code/varying_ints.stan",
+    "stan/model_code/varying_ints.stan",
     "stan/model_code/varying_ints_slopes_non_centered.stan",
     "stan/model_code/varying_ints_slopes_non_centered.stan",
-    "stan/model_code/varying_ints_slopes_non_centered.stan",
-    "stan/model_code/varying_ints_slopes_non_centered.stan",
-    "stan/model_code/varying_ints_slopes_non_centered_no_test_variation.stan",
     "stan/model_code/varying_ints_slopes_non_centered.stan"
   )
 
 assert_that(length(data.files) == length(dataset.model.link))
 
-seeds <- rep(c(1, 8, 8, 8, 1, 8), times = 2)
+seeds <- rep(c(8, 8, 8), times = 3)
 
 # Loop through datasets and fit the models
 
@@ -87,15 +84,21 @@ for(i in 1:length(data.files)) {
   fit.model$save_object(
     file = paste0(
       "stan/saved_models/",
-      ifelse(
-        str_detect(dataset.model.link[i], "varying"),
-        # names for varying effect models
-        data.files[i] %>%
-          str_replace("dat.f", "model.f.v") %>%
+      case_when(
+        str_detect(dataset.model.link[i], "main_effects") == TRUE ~
+          # names for simple models
+          data.files[i] %>%
+          str_replace("dat.f", "model.f.m") %>%
+          str_replace(".stan", ""),
+        str_detect(dataset.model.link[i], "varying_ints_slopes") == TRUE ~
+          # names for varying effect models
+          data.files[i] %>%
+          str_replace("dat.f", "model.f.vis") %>%
           str_replace(".stan", ""),
         # names for pooled effects models
-        data.files[i] %>%
-          str_replace("dat.f", "model.f") %>%
+        str_detect(dataset.model.link[i], "varying_ints") == TRUE ~ 
+          data.files[i] %>%
+          str_replace("dat.f", "model.f.vi") %>%
           str_replace(".stan", "")
       )
     )
