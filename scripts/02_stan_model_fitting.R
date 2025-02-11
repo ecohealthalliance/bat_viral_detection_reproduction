@@ -11,8 +11,10 @@
 #+ loading_chunk, echo=FALSE, message=FALSE, results="hide"
 
 
-# Loop through all datasets twice, the first time fitting the pooled effects
-# model, the second time fitting the varying intercepts and slopes model
+# Loop through all modeling datasets three times to:
+# 1) fit main effects models
+# 2) fit varying intercepts models
+# 3) fit varying intercepts and slopes models
 
 
 # Load packages
@@ -60,7 +62,7 @@ seeds <- rep(c(8, 8, 8), times = 3)
 
 for(i in 1:length(data.files)) {
   
-  # Assign one dataset
+  # Assign dataset
   
   stan.data <- readRDS(paste0("stan/cleaned_data/", data.files[i]))
   
@@ -86,16 +88,16 @@ for(i in 1:length(data.files)) {
       "stan/saved_models/",
       case_when(
         str_detect(dataset.model.link[i], "main_effects") == TRUE ~
-          # names for simple models
+          # names for main effects models
           data.files[i] %>%
           str_replace("dat.f", "model.f.m") %>%
           str_replace(".stan", ""),
         str_detect(dataset.model.link[i], "varying_ints_slopes") == TRUE ~
-          # names for varying effect models
+          # names for varying intercepts and slopes models
           data.files[i] %>%
           str_replace("dat.f", "model.f.vis") %>%
           str_replace(".stan", ""),
-        # names for pooled effects models
+        # names for varying intercepts models
         str_detect(dataset.model.link[i], "varying_ints") == TRUE ~ 
           data.files[i] %>%
           str_replace("dat.f", "model.f.vi") %>%
