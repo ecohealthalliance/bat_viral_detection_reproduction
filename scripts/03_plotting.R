@@ -229,10 +229,8 @@ ggsave("outputs/Fig1.png", width = 10, height = 6, dpi = 350)
 # Figure 2 - Model parameter summary
 
 
-model.colors <- c("black", "deepskyblue3", "darkseagreen4", 
-                "coral3", "plum4", "darkorange3")
+model.colors <- c("black", "coral3", "plum4")
 
-pars <- c("mu_alpha", "beta_pregnant_mod", "beta_lactating_mod")
 bracket <- 
   list(
     c("Reproductive Effects on Viral Detection", 
@@ -240,15 +238,31 @@ bracket <-
       "Lactation Effect")
   )
 
-# Generate a data frame of parameter means and HPDIs for each relevant
-# parameter from each fit model
-
-tidy.model.output <- data.frame(NULL)
 conf.level <- 0.95
 
-for (model.name in processed.model.names[1:6]) {
+helper.data <- dat.f.trim %>%
+  group_by(test_requested_viral_family) %>%
+  count() %>%
+  bind_rows(
+    ., 
+    data.frame(
+      test_requested_viral_family = "All Viral Families", 
+      n = nrow(dat.f.trim)
+    )
+  )
+
+
+# For main effects models
+
+pars <- c("mu_alpha", "beta_pregnant_mod", "beta_lactating_mod")
+
+# Generate a data frame of parameter means and HPDIs for each relevant
+# parameter from each fit model
+tidy.model.output <- data.frame(NULL)
+
+for (model.name in processed.model.names[1:3]) {
   
-  temp.df <- 
+  temp.df <-
     get(model.name) %>%
     select(all_of(pars)) %>%
     # Get means and HPDIs
@@ -263,7 +277,7 @@ for (model.name in processed.model.names[1:6]) {
     # Clean up model names
     mutate(
       model = rep(model.name, length(pars)),
-      model = str_replace(model, "model\\.f", ""),
+      model = str_replace(model, "model\\.f.m", ""),
       model = str_replace(model, "\\.p", ""),
       model = str_replace(model, "\\.", ""),
       model = ifelse(model == "", "All Viral Families", model)
@@ -271,17 +285,6 @@ for (model.name in processed.model.names[1:6]) {
   
   tidy.model.output <- rbind(tidy.model.output, temp.df)
 }
-
-helper.data <- dat.f.trim %>%
-  group_by(test_requested_viral_family) %>%
-  count() %>%
-  bind_rows(
-    ., 
-    data.frame(
-      test_requested_viral_family = "All Viral Families", 
-      n = nrow(dat.f.trim)
-    )
-  )
 
 tidy.model.output <- tidy.model.output %>%
   left_join(
@@ -304,7 +307,7 @@ tidy.model.output <- tidy.model.output %>%
 plot1 <- {
   tidy.model.output %>%
     dotwhisker::relabel_predictors(
-      c(mu_alpha = "Global Intercept",
+      c(mu_alpha = "Intercept",
         beta_pregnant_mod = "Pregnancy Effect",
         beta_lactating_mod = "Lactation Effect"
       )
@@ -319,7 +322,107 @@ plot1 <- {
       legend.title = element_text(size = 9)
     ) +
     geom_vline(xintercept = 0, colour = "black", linetype = 2) +
-    xlim(-10, 5) +
+    xlim(-8, 2) +
+    scale_color_manual(
+      values = rev(model.colors),
+      name = "Viral Dataset"
+    )
+} %>%
+  dotwhisker::add_brackets(bracket)
+
+
+plot1
+
+ggsave("outputs/main_effects_model/Fig2.png", 
+       width = 8, height = 6, dpi = 350)
+
+# What proportion of posterior probability mass supports a negative pregnancy
+# effect for each model?
+sum(model.f.m.p$beta_pregnant_mod < 0)/
+  nrow(model.f.m.p)
+sum(model.f.m.Coronaviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.m.Coronaviridae.p)
+sum(model.f.m.Paramyxoviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.m.Paramyxoviridae.p)
+
+# What proportion of posterior probability mass supports a negative lactation
+# effect for each model?
+sum(model.f.m.p$beta_lactating_mod < 0)/
+  nrow(model.f.m.p)
+sum(model.f.m.Coronaviridae.p$beta_lactating_mod < 0)/
+  nrow(model.f.m.Coronaviridae.p)
+sum(model.f.m.Paramyxoviridae.p$beta_lactating_mod < 0)/
+  nrow(model.f.m.Paramyxoviridae.p)
+
+
+# For varying intercepts models
+
+pars <- c("mu_alpha", "beta_pregnant_mod", "beta_lactating_mod")
+tidy.model.output <- data.frame(NULL)
+
+for (model.name in processed.model.names[4:6]) {
+  
+  temp.df <- 
+    get(model.name) %>%
+    select(all_of(pars)) %>%
+    # Get means and HPDIs
+    tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+    group_by(term) %>%
+    summarize(
+      estimate = mean(value),
+      conf.low = HPDI(value, prob = conf.level)[1],
+      conf.high = HPDI(value, prob = conf.level)[2]
+    ) %>%
+    ungroup() %>%
+    # Clean up model names
+    mutate(
+      model = rep(model.name, length(pars)),
+      model = str_replace(model, "model\\.f.vi", ""),
+      model = str_replace(model, "\\.p", ""),
+      model = str_replace(model, "\\.", ""),
+      model = ifelse(model == "", "All Viral Families", model)
+    )
+  
+  tidy.model.output <- rbind(tidy.model.output, temp.df)
+}
+
+tidy.model.output <- tidy.model.output %>%
+  left_join(
+    ., helper.data, 
+    by = c("model" = "test_requested_viral_family")
+  ) %>%
+  mutate(model = paste0(model, " (n = ", n, ")"))
+
+models.excluding.all <- 
+  unique(tidy.model.output$model)[!str_detect(unique(tidy.model.output$model), "All Viral Families")]
+all.model <- 
+  unique(tidy.model.output$model)[str_detect(unique(tidy.model.output$model), "All Viral Families")]
+
+tidy.model.output <- tidy.model.output %>%
+  mutate(
+    model = factor(model, levels = c(all.model, models.excluding.all))
+  )
+
+
+plot1 <- {
+  tidy.model.output %>%
+    dotwhisker::relabel_predictors(
+      c(mu_alpha = "Intercept",
+        beta_pregnant_mod = "Pregnancy Effect",
+        beta_lactating_mod = "Lactation Effect"
+      )
+    ) %>%
+    dotwhisker::dwplot(
+      dot_args = list(size = 2),
+    ) +
+    custom_theme +
+    xlab("Parameter Estimate") +
+    theme(
+      legend.text = element_text(size = 8),
+      legend.title = element_text(size = 9)
+    ) +
+    geom_vline(xintercept = 0, colour = "black", linetype = 2) +
+    xlim(-8, 2) +
     scale_color_manual(
       values = rev(model.colors),
       name = "Viral Dataset"
@@ -327,7 +430,7 @@ plot1 <- {
   } %>%
   dotwhisker::add_brackets(bracket)
 
-plot2 <- model.f.p %>%
+plot2 <- model.f.vi.p %>%
   select(matches("alpha_host_species\\[")) %>%
   tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
   group_by(term) %>%
@@ -350,7 +453,7 @@ plot2 <- model.f.p %>%
   ggtitle("Intercepts by Host Species") +
   theme(plot.title = element_text(hjust = 0.5))
 
-model.f.p %>%
+model.f.vi.p %>%
   select(matches("alpha_host_species\\[")) %>%
   tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
   group_by(term) %>%
@@ -368,44 +471,36 @@ plot_grid(plot1, plot2,
           ncol = 1, scale = c(1, 0.95), rel_heights = c(1, 1.1),
           labels = "auto", label_size = 24)
 
-ggsave("outputs/pooled_effects_model/Fig2.png", 
-       width = 8, height = 10, dpi = 350)
-
 plot1
 
-ggsave("outputs/pooled_effects_model/Fig2.png", 
+ggsave("outputs/varying_ints_model/Fig2.png", 
        width = 8, height = 6, dpi = 350)
 
 # What proportion of posterior probability mass supports a negative pregnancy
 # effect for each model?
-sum(model.f.p$beta_pregnant_mod < 0)/
-  nrow(model.f.p)
-sum(model.f.Adenoviridae.p$beta_pregnant_mod < 0)/
-  nrow(model.f.Adenoviridae.p)
-sum(model.f.Coronaviridae.p$beta_pregnant_mod < 0)/
-  nrow(model.f.Coronaviridae.p)
-sum(model.f.Herpesviridae.p$beta_pregnant_mod < 0)/
-  nrow(model.f.Herpesviridae.p)
-sum(model.f.Paramyxoviridae.p$beta_pregnant_mod < 0)/
-  nrow(model.f.Paramyxoviridae.p)
-sum(model.f.Polyomaviridae.p$beta_pregnant_mod < 0)/
-  nrow(model.f.Polyomaviridae.p)
+sum(model.f.vi.p$beta_pregnant_mod < 0)/
+  nrow(model.f.vi.p)
+sum(model.f.vi.Coronaviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.vi.Coronaviridae.p)
+sum(model.f.vi.Paramyxoviridae.p$beta_pregnant_mod < 0)/
+  nrow(model.f.vi.Paramyxoviridae.p)
+
+# What proportion of posterior probability mass supports a negative lactation
+# effect for each model?
+sum(model.f.vi.p$beta_lactating_mod < 0)/
+  nrow(model.f.vi.p)
+sum(model.f.vi.Coronaviridae.p$beta_lactating_mod < 0)/
+  nrow(model.f.vi.Coronaviridae.p)
+sum(model.f.vi.Paramyxoviridae.p$beta_lactating_mod < 0)/
+  nrow(model.f.vi.Paramyxoviridae.p)
 
 
-# Replicate analysis and figures for varying slopes model
+# For varying intercepts and slopes models
 
 pars <- c("beta[1]", "beta[2]", "beta[3]")
-bracket <- 
-  list(
-    c("Reproductive Effects on Viral Detection", 
-      "Pregnancy Effect", 
-      "Lactation Effect")
-  )
-
 tidy.model.output <- data.frame(NULL)
-conf.level <- 0.95
 
-for (model.name in processed.model.names[7:12]) {
+for (model.name in processed.model.names[7:9]) {
   
   temp.df <-
     get(model.name) %>%
@@ -422,7 +517,7 @@ for (model.name in processed.model.names[7:12]) {
     # Clean up model names
     mutate(
       model = rep(model.name, length(pars)),
-      model = str_replace(model, "model\\.f.v", ""),
+      model = str_replace(model, "model\\.f.vis", ""),
       model = str_replace(model, "\\.p", ""),
       model = str_replace(model, "\\.", ""),
       model = ifelse(model == "", "All Viral Families", model)
@@ -467,7 +562,7 @@ plot1 <- {
       legend.title = element_text(size = 9)
     ) +
     geom_vline(xintercept = 0, colour = "black", linetype = 2) +
-    xlim(-10, 5) +
+    xlim(-8, 2) +
     scale_color_manual(
       values = rev(model.colors),
       name = "Viral Dataset"
@@ -475,7 +570,7 @@ plot1 <- {
 } %>%
   dotwhisker::add_brackets(bracket)
 
-plot2 <- model.f.v.p %>%
+plot2 <- model.f.vis.p %>%
   select(matches("beta_host_species\\[1")) %>%
   tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
   group_by(term) %>%
@@ -498,7 +593,7 @@ plot2 <- model.f.v.p %>%
   ggtitle("Intercepts by Host Species") +
   theme(plot.title = element_text(hjust = 0.5))
 
-model.f.v.p %>%
+model.f.vis.p %>%
   select(matches("beta_host_species\\[1")) %>%
   tidyr::pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
   group_by(term) %>%
@@ -516,43 +611,28 @@ plot_grid(plot1, plot2,
           ncol = 1, scale = c(1, 0.95), rel_heights = c(1, 1.1),
           labels = "auto", label_size = 24)
 
-ggsave("outputs/varying_slopes_model/Fig2.png", 
-       width = 8, height = 10, dpi = 350)
-
 plot1
 
-ggsave("outputs/varying_slopes_model/Fig2.png", 
+ggsave("outputs/varying_ints_slopes_model/Fig2.png", 
        width = 8, height = 6, dpi = 350)
 
 # What proportion of posterior probability mass supports a negative pregnancy
 # effect for each model?
-sum(model.f.v.p$`beta[2]` < 0)/
-  nrow(model.f.v.p)
-sum(model.f.v.Adenoviridae.p$`beta[2]` < 0)/
-  nrow(model.f.v.Adenoviridae.p)
-sum(model.f.v.Coronaviridae.p$`beta[2]` < 0)/
-  nrow(model.f.v.Coronaviridae.p)
-sum(model.f.v.Herpesviridae.p$`beta[2]` < 0)/
-  nrow(model.f.v.Herpesviridae.p)
-sum(model.f.v.Paramyxoviridae.p$`beta[2]` < 0)/
-  nrow(model.f.v.Paramyxoviridae.p)
-sum(model.f.v.Polyomaviridae.p$`beta[2]` < 0)/
-  nrow(model.f.v.Polyomaviridae.p)
+sum(model.f.vis.p$`beta[2]` < 0)/
+  nrow(model.f.vis.p)
+sum(model.f.vis.Coronaviridae.p$`beta[2]` < 0)/
+  nrow(model.f.vis.Coronaviridae.p)
+sum(model.f.vis.Paramyxoviridae.p$`beta[2]` < 0)/
+  nrow(model.f.vis.Paramyxoviridae.p)
 
 # What proportion of posterior probability mass supports a negative lactation
 # effect for each model?
-sum(model.f.v.p$`beta[3]` < 0)/
-  nrow(model.f.v.p)
-sum(model.f.v.Adenoviridae.p$`beta[3]` < 0)/
-  nrow(model.f.v.Adenoviridae.p)
-sum(model.f.v.Coronaviridae.p$`beta[3]` < 0)/
-  nrow(model.f.v.Coronaviridae.p)
-sum(model.f.v.Herpesviridae.p$`beta[3]` < 0)/
-  nrow(model.f.v.Herpesviridae.p)
-sum(model.f.v.Paramyxoviridae.p$`beta[3]` < 0)/
-  nrow(model.f.v.Paramyxoviridae.p)
-sum(model.f.v.Polyomaviridae.p$`beta[3]` < 0)/
-  nrow(model.f.v.Polyomaviridae.p)
+sum(model.f.vis.p$`beta[3]` < 0)/
+  nrow(model.f.vis.p)
+sum(model.f.vis.Coronaviridae.p$`beta[3]` < 0)/
+  nrow(model.f.vis.Coronaviridae.p)
+sum(model.f.vis.Paramyxoviridae.p$`beta[3]` < 0)/
+  nrow(model.f.vis.Paramyxoviridae.p)
  
 # /*
 #==============================================================================
@@ -566,9 +646,11 @@ sims <- 50
 samples.per.sim <- 1000
 
 
+# For varying intercepts models
+
 big.sim.df <- data.frame(NULL)
 
-for(x in processed.model.names[1:6]) {
+for(x in processed.model.names[4:6]) {
   
   dat <- get(x)
   
@@ -616,18 +698,18 @@ for(x in processed.model.names[1:6]) {
 big.sim.df <- big.sim.df %>%
   mutate(
     model = 
-      fct_relevel(model, "model.f.p"),
+      fct_relevel(model, "model.f.vi.p"),
     condition = 
       fct_relevel(condition, c("Non-reproductive", "Pregnant", "Lactating"))
   )
 
 model.labels <- c(
-  model.f.p = "All Viral Families",
-  model.f.Adenoviridae.p = "Adenoviridae",
-  model.f.Coronaviridae.p = "Coronaviridae",
-  model.f.Herpesviridae.p = "Herpesviridae",
-  model.f.Paramyxoviridae.p = "Paramyxoviridae",
-  model.f.Polyomaviridae.p = "Polyomaviridae"
+  model.f.vi.p = "All Viral Families",
+  model.f.vi.Adenoviridae.p = "Adenoviridae",
+  model.f.vi.Coronaviridae.p = "Coronaviridae",
+  model.f.vi.Herpesviridae.p = "Herpesviridae",
+  model.f.vi.Paramyxoviridae.p = "Paramyxoviridae",
+  model.f.vi.Polyomaviridae.p = "Polyomaviridae"
 )
 
 alpha <- 1
@@ -675,15 +757,15 @@ plot +
     arrow = arrow(angle = 20, length = unit(0.1, "inches"), type = "closed")
   )
 
-ggsave("outputs/pooled_effects_model/Fig3.png", 
+ggsave("outputs/varying_ints_model/Fig3.png", 
        height = 5, width = 8, dpi = 350)
 
 
-# Replicate analysis and figure for varying slopes model
+# Replicate analysis and figure for varying intercepts and slopes model
 
 big.sim.df <- data.frame(NULL)
 
-for(x in processed.model.names[7:12]) {
+for(x in processed.model.names[7:9]) {
   
   dat <- get(x)
   
@@ -731,18 +813,18 @@ for(x in processed.model.names[7:12]) {
 big.sim.df <- big.sim.df %>%
   mutate(
     model = 
-      fct_relevel(model, "model.f.v.p"),
+      fct_relevel(model, "model.f.vis.p"),
     condition = 
       fct_relevel(condition, c("Non-reproductive", "Pregnant", "Lactating"))
   )
 
 model.labels <- c(
-  model.f.v.p = "All Viral Families",
-  model.f.v.Adenoviridae.p = "Adenoviridae",
-  model.f.v.Coronaviridae.p = "Coronaviridae",
-  model.f.v.Herpesviridae.p = "Herpesviridae",
-  model.f.v.Paramyxoviridae.p = "Paramyxoviridae",
-  model.f.v.Polyomaviridae.p = "Polyomaviridae"
+  model.f.vis.p = "All Viral Families",
+  model.f.vis.Adenoviridae.p = "Adenoviridae",
+  model.f.vis.Coronaviridae.p = "Coronaviridae",
+  model.f.vis.Herpesviridae.p = "Herpesviridae",
+  model.f.vis.Paramyxoviridae.p = "Paramyxoviridae",
+  model.f.vis.Polyomaviridae.p = "Polyomaviridae"
 )
 
 plot <- big.sim.df %>%
@@ -783,15 +865,15 @@ plot +
     arrow = arrow(angle = 20, length = unit(0.1, "inches"), type = "closed")
   )
 
-ggsave("outputs/varying_slopes_model/Fig3.png", 
+ggsave("outputs/varying_ints_slopes_model/Fig3.png", 
        height = 5, width = 8, dpi = 350)
 
 
-# Alternate plot for varying slopes model
+# Alternate plot for varying intercepts and slopes model
 
 big.df <- data.frame(NULL)
 
-for(x in processed.model.names[7:12]) {
+for(x in processed.model.names[7:9]) {
   
   dat <- get(x)
   
@@ -821,6 +903,8 @@ for(x in processed.model.names[7:12]) {
       upper_80 = HPDI(value, prob = 0.8)[2],
       lower_90 = HPDI(value, prob = 0.9)[1],
       upper_90 = HPDI(value, prob = 0.9)[2],
+      lower_95 = HPDI(value, prob = 0.95)[1],
+      upper_95 = HPDI(value, prob = 0.95)[2],
       lower_99 = HPDI(value, prob = 0.99)[1],
       upper_99 = HPDI(value, prob = 0.99)[2]
     ) %>%
@@ -832,12 +916,12 @@ for(x in processed.model.names[7:12]) {
 big.df <- big.df %>%
   mutate(
     model = 
-      fct_relevel(model, "model.f.v.p"),
+      fct_relevel(model, "model.f.vis.p"),
     condition = 
       fct_relevel(condition, c("Non-reproductive", "Pregnant", "Lactating"))
   ) %>%
   arrange(model, condition) %>%
-  mutate(x = rep(1:3, times = 6))
+  mutate(x = rep(1:3, times = 3))
 
 big.df %>%
   ggplot(aes(x = condition, y = mode, color = condition)) +
@@ -846,12 +930,13 @@ big.df %>%
     inherit.aes = FALSE, 
     aes(x = x, y = mode),
     color = "black", 
-    linewidth = 0.3
+    linewidth = 0.1
   ) +
   geom_point(size = 3) +
   geom_linerange(aes(ymin = lower_80, ymax = upper_80), linewidth = 0.5) +
   geom_linerange(aes(ymin = lower_50, ymax = upper_50), linewidth = 1.5) +
   ylab("Estimated Viral Detection Probability") +
+  ylim(0, 0.08) +
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
@@ -870,7 +955,7 @@ big.df %>%
   ) +
   facet_wrap(~model, labeller = labeller(model = model.labels), nrow = 1)
 
-ggsave("outputs/varying_slopes_model/Fig3.png", 
+ggsave("outputs/varying_ints_slopes_model/Fig3.png", 
        height = 5, width = 8, dpi = 350)
 
 # /*
@@ -1090,7 +1175,7 @@ dev.off()
 
 
 p <- bayesplot::mcmc_trace(
-  model.f %>% 
+  model.f.vi %>% 
     posterior::as_draws(),
   pars = c(
     "mu_alpha", "beta_pregnant_mod", "beta_lactating_mod",
@@ -1117,14 +1202,14 @@ p +
     legend.position = "none"
   )
 
-ggsave("outputs/pooled_effects_model/FigS4.png", 
+ggsave("outputs/varying_ints_model/FigS4.png", 
        width = 10, height = 10, dpi = 350)
 
 
-# Replicate for the varying slopes model
+# Replicate for the varying intercepts and slopes model
 
 p <- bayesplot::mcmc_trace(
-  model.f.v %>% 
+  model.f.vis %>% 
     posterior::as_draws(),
   pars = c(
     "beta[1]", "beta[2]", "beta[3]",
@@ -1155,7 +1240,7 @@ p +
     legend.position = "none"
   )
 
-ggsave("outputs/varying_slopes_model/FigS4.png", 
+ggsave("outputs/varying_ints_slopes_model/FigS4.png", 
        width = 12, height = 12, dpi = 350)
 
 # /*
@@ -1167,7 +1252,7 @@ ggsave("outputs/varying_slopes_model/FigS4.png",
 
 
 dat.df <- dat.f.trim
-model.df <- model.f.p
+model.df <- model.f.vi.p
 
 cols.to.plot <- grep("alpha", colnames(model.df), value = T) %>%
   grep("mu_|tilde|species\\[", ., value = T, invert = T)
@@ -1195,7 +1280,7 @@ assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 # To plot all varying effects
 
-png("outputs/pooled_effects_model/FigS6a.png", width = 1200, height = 800)
+png("outputs/varying_ints_model/FigS6a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1239,9 +1324,9 @@ dev.off()
 plotting.list <- list(
   c("host_species_offset", "year", "country",
     "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
-  c("outputs/pooled_effects_model/FigS6b.png", "outputs/pooled_effects_model/FigS6c.png",
-    "outputs/pooled_effects_model/FigS6d.png", "outputs/pooled_effects_model/FigS6e.png", 
-    "outputs/pooled_effects_model/FigS6f.png", "outputs/pooled_effects_model/FigS6g.png"),
+  c("outputs/varying_ints_model/FigS6b.png", "outputs/varying_ints_model/FigS6c.png",
+    "outputs/varying_ints_model/FigS6d.png", "outputs/varying_ints_model/FigS6e.png", 
+    "outputs/varying_ints_model/FigS6f.png", "outputs/varying_ints_model/FigS6g.png"),
   c("Host Species", "Year of Sample Collection",
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
@@ -1297,10 +1382,10 @@ for (i in 1:length(plotting.list[[1]])) {
 }
 
 
-# Replicate for the varying slopes model
+# Replicate for the varying intercepts and slopes model
 
 dat.df <- dat.f.trim
-model.df <- model.f.v.p
+model.df <- model.f.vis.p
 
 cols.to.plot <- grep("beta_host_species", colnames(model.df), value = T)
 
@@ -1316,7 +1401,7 @@ varying.intercept.slope.group.labels <- c(
 
 # To plot all varying intercepts and slopes by species
 
-png("outputs/varying_slopes_model/FigS6.png", width = 1500, height = 1500)
+png("outputs/varying_ints_slopes_model/FigS6.png", width = 1500, height = 1500)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1362,8 +1447,8 @@ dev.off()
 
 plotting.list <- list(
   c("beta_host_species\\[1", "beta_host_species\\[2", "beta_host_species\\[3"),
-  c("outputs/varying_slopes_model/FigS6a.png", "outputs/varying_slopes_model/FigS6b.png", 
-    "outputs/varying_slopes_model/FigS6c.png"),
+  c("outputs/varying_ints_slopes_model/FigS6a.png", "outputs/varying_ints_slopes_model/FigS6b.png", 
+    "outputs/varying_ints_slopes_model/FigS6c.png"),
   c("Species-Specific Intercepts", "Species-Specific Pregnancy Effects",
     "Species-Specific Lactation Effects"),
   c(c(-12, 2), c(-4, 2), c(-5, 3))
@@ -1439,7 +1524,7 @@ assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 # To plot all other varying effects
 
-png("outputs/varying_slopes_model/FigS7a.png", width = 1200, height = 800)
+png("outputs/varying_ints_slopes_model/FigS7a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1483,9 +1568,9 @@ dev.off()
 plotting.list <- list(
   c("year", "country",
     "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
-  c("outputs/varying_slopes_model/FigS7b.png", "outputs/varying_slopes_model/FigS7c.png",
-    "outputs/varying_slopes_model/FigS7d.png", "outputs/varying_slopes_model/FigS7e.png", 
-    "outputs/varying_slopes_model/FigS7f.png"),
+  c("outputs/varying_ints_slopes_model/FigS7b.png", "outputs/varying_ints_slopes_model/FigS7c.png",
+    "outputs/varying_ints_slopes_model/FigS7d.png", "outputs/varying_ints_slopes_model/FigS7e.png", 
+    "outputs/varying_ints_slopes_model/FigS7f.png"),
   c("Year of Sample Collection",
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
@@ -1548,7 +1633,7 @@ for (i in 1:length(plotting.list[[1]])) {
 # Figure S5 - In-sample prediction plot
 
 # Generate data frame of all alpha values from the full fit model
-d.preds <- model.f %>%
+d.preds <- model.f.vi %>%
   posterior::as_draws_df() %>%
   select(contains("alpha")) %>%
   select(!contains("_")) 
@@ -1700,14 +1785,14 @@ plot.data %>%
     axis.text.x = element_text(face = "bold")
   )
 
-ggsave("outputs/pooled_effects_model/FigS5.png", 
+ggsave("outputs/varying_ints_model/FigS5.png", 
        height = 5, width = 10, dpi = 350)
 
 
-# Replicate for the varying slopes model
+# Replicate for the varying intercepts and slopes model
 
 # Generate data frame of all alpha values from the full fit model
-d.preds <- model.f.v %>%
+d.preds <- model.f.vis %>%
   posterior::as_draws_df() %>%
   select(contains("alpha")) %>%
   select(!contains("_")) 
@@ -1830,5 +1915,5 @@ plot.data %>%
     axis.text.x = element_text(face = "bold")
   )
 
-ggsave("outputs/varying_slopes_model/FigS5.png", 
+ggsave("outputs/varying_ints_slopes_model/FigS5.png", 
        height = 5, width = 10, dpi = 350)
