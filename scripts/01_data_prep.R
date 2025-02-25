@@ -414,21 +414,28 @@ d.sample.sizes <-
 write_csv(d.sample.sizes, file = "outputs/d.sample.sizes.csv")
 
 
-# Create viral family-specific data subsets
+# Create viral family-specific data subsets, filtering to viral families with
+# at least 200 pregnant and 200 lactating individuals screened
 
-viral.fam.preg.pos <- dat.f.trim %>% 
+viral.fam.preg.sufficient <- dat.f.trim %>% 
   group_by(test_requested_viral_family, pregnant_mod) %>%
-  summarize(positive = sum(virus_detected)) %>%
-  filter(pregnant_mod == 1, positive >= 1) %>%
+  summarize(
+    n = n(),
+    n_positive = sum(virus_detected)
+  ) %>%
+  filter(pregnant_mod == 1, n >= 200) %>%
   pull(test_requested_viral_family)
 
-viral.fam.lac.pos <- dat.f.trim %>% 
+viral.fam.lac.sufficient <- dat.f.trim %>% 
   group_by(test_requested_viral_family, lactating_mod) %>%
-  summarize(positive = sum(virus_detected)) %>%
-  filter(lactating_mod == 1, positive >= 1) %>%
+  summarize(
+    n = n(),
+    n_positive = sum(virus_detected)
+  ) %>%
+  filter(lactating_mod == 1, n >= 200) %>%
   pull(test_requested_viral_family)
 
-viral.families <- intersect(viral.fam.preg.pos, viral.fam.lac.pos)
+viral.families <- intersect(viral.fam.preg.sufficient, viral.fam.lac.sufficient)
 
 data.list <- vector("list", length(viral.families) + 1)
 data.list[[1]] <- dat.f.trim
