@@ -1117,7 +1117,7 @@ dev.off()
 # */
 
 
-# Figure S3 - Sampling map
+# Figure S5 - Sampling map
 
 
 summary.mapping.df <- dat.f.trim %>%
@@ -1154,7 +1154,7 @@ legend.df <-
 data("wrld_simpl")
 
 
-png(filename = "outputs/FigS3.png", width = 1000, height = 600, res = 80)
+png(filename = "outputs/FigS5.png", width = 1000, height = 600, res = 80)
 
 plot(wrld_simpl, xlim = c(-120, 150), ylim = c(-60, 60),
      col = color.df$color,
@@ -1171,7 +1171,7 @@ dev.off()
 # */
 
 
-# Figure S4 - Trace plots
+# Trace plots
 
 
 p <- bayesplot::mcmc_trace(
@@ -1202,7 +1202,7 @@ p +
     legend.position = "none"
   )
 
-ggsave("outputs/varying_ints_model/FigS4.png", 
+ggsave("outputs/varying_ints_model/FigS6.png", 
        width = 10, height = 10, dpi = 350)
 
 
@@ -1240,7 +1240,7 @@ p +
     legend.position = "none"
   )
 
-ggsave("outputs/varying_ints_slopes_model/FigS4.png", 
+ggsave("outputs/varying_ints_slopes_model/FigS6.png", 
        width = 12, height = 12, dpi = 350)
 
 # /*
@@ -1248,7 +1248,7 @@ ggsave("outputs/varying_ints_slopes_model/FigS4.png",
 # */
 
 
-# Figure S6 - Ridgeline plots for varying effects
+# Ridgeline plots for varying effects
 
 
 dat.df <- dat.f.trim
@@ -1280,7 +1280,7 @@ assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 # To plot all varying effects
 
-png("outputs/varying_ints_model/FigS6a.png", width = 1200, height = 800)
+png("outputs/varying_ints_model/FigS9a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1324,9 +1324,9 @@ dev.off()
 plotting.list <- list(
   c("host_species_offset", "year", "country",
     "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
-  c("outputs/varying_ints_model/FigS6b.png", "outputs/varying_ints_model/FigS6c.png",
-    "outputs/varying_ints_model/FigS6d.png", "outputs/varying_ints_model/FigS6e.png", 
-    "outputs/varying_ints_model/FigS6f.png", "outputs/varying_ints_model/FigS6g.png"),
+  c("outputs/varying_ints_model/FigS9b.png", "outputs/varying_ints_model/FigS9c.png",
+    "outputs/varying_ints_model/FigS9d.png", "outputs/varying_ints_model/FigS9e.png", 
+    "outputs/varying_ints_model/FigS9f.png", "outputs/varying_ints_model/FigS9g.png"),
   c("Host Species", "Year of Sample Collection",
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
@@ -1401,7 +1401,7 @@ varying.intercept.slope.group.labels <- c(
 
 # To plot all varying intercepts and slopes by species
 
-png("outputs/varying_ints_slopes_model/FigS6.png", width = 1500, height = 1500)
+png("outputs/varying_ints_slopes_model/FigS8.png", width = 1500, height = 1500)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1447,8 +1447,8 @@ dev.off()
 
 plotting.list <- list(
   c("beta_host_species\\[1", "beta_host_species\\[2", "beta_host_species\\[3"),
-  c("outputs/varying_ints_slopes_model/FigS6a.png", "outputs/varying_ints_slopes_model/FigS6b.png", 
-    "outputs/varying_ints_slopes_model/FigS6c.png"),
+  c("outputs/varying_ints_slopes_model/FigS8a.png", "outputs/varying_ints_slopes_model/FigS8b.png", 
+    "outputs/varying_ints_slopes_model/FigS8c.png"),
   c("Species-Specific Intercepts", "Species-Specific Pregnancy Effects",
     "Species-Specific Lactation Effects"),
   c(c(-12, 2), c(-4, 2), c(-5, 3))
@@ -1524,7 +1524,7 @@ assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 # To plot all other varying effects
 
-png("outputs/varying_ints_slopes_model/FigS7a.png", width = 1200, height = 800)
+png("outputs/varying_ints_slopes_model/FigS9a.png", width = 1200, height = 800)
 
 p <- model.df %>% 
   select(all_of(cols.to.plot)) %>%
@@ -1568,9 +1568,9 @@ dev.off()
 plotting.list <- list(
   c("year", "country",
     "specimen_type_group", "test_requested_mod", "diagnostic_laboratory_name"),
-  c("outputs/varying_ints_slopes_model/FigS7b.png", "outputs/varying_ints_slopes_model/FigS7c.png",
-    "outputs/varying_ints_slopes_model/FigS7d.png", "outputs/varying_ints_slopes_model/FigS7e.png", 
-    "outputs/varying_ints_slopes_model/FigS7f.png"),
+  c("outputs/varying_ints_slopes_model/FigS9b.png", "outputs/varying_ints_slopes_model/FigS9c.png",
+    "outputs/varying_ints_slopes_model/FigS9d.png", "outputs/varying_ints_slopes_model/FigS9e.png", 
+    "outputs/varying_ints_slopes_model/FigS9f.png"),
   c("Year of Sample Collection",
     "Country of Sample Collection", "Specimen Type", 
     "Viral Test Protocol", "Diagnostic Laboratory Conducting Testing"
@@ -1630,7 +1630,7 @@ for (i in 1:length(plotting.list[[1]])) {
 # */
 
 
-# Figure S5 - In-sample prediction plot
+# In-sample prediction plot
 
 # Generate data frame of all alpha values from the full fit model
 d.preds <- model.f.vi %>%
@@ -1785,7 +1785,7 @@ plot.data %>%
     axis.text.x = element_text(face = "bold")
   )
 
-ggsave("outputs/varying_ints_model/FigS5.png", 
+ggsave("outputs/varying_ints_model/FigS7.png", 
        height = 5, width = 10, dpi = 350)
 
 
@@ -1915,5 +1915,5 @@ plot.data %>%
     axis.text.x = element_text(face = "bold")
   )
 
-ggsave("outputs/varying_ints_slopes_model/FigS5.png", 
+ggsave("outputs/varying_ints_slopes_model/FigS7.png", 
        height = 5, width = 10, dpi = 350)
