@@ -56,7 +56,7 @@ dataset.model.link <-
 
 assert_that(length(data.files) == length(dataset.model.link))
 
-seeds <- rep(c(8, 8, 8), times = 3)
+seeds <- rep(8, times = length(data.files))
 
 # Loop through datasets and fit the models
 
