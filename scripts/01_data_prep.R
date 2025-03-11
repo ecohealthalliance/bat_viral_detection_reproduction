@@ -20,7 +20,7 @@ library(reskew) # devtools::install_github("eveskew/reskew")
 source("R/functions.R")
 
 
-# Import raw P1 data tables
+# Import raw PREDICT-1 data tables
 
 e <- read_csv("data/p1_extracts/events.csv") %>%
   remove_NA_cols()
@@ -39,14 +39,16 @@ ts <- read_csv("data/p1_extracts/test_specimen_ids.csv") %>%
 # Add higher-level bat taxonomic information to the animal table
 
 a <- left_join(
-  a, read_csv("data/lookup_tables/P1_bat_classification.csv"), 
+  a, 
+  read_csv("data/lookup_tables/P1_bat_classification.csv"), 
   by = "family"
 )
 
 # Add information on viral family taxonomy to the test table
 
 t <- left_join(
-  t, read_csv("data/lookup_tables/P1_viral_family_of_tests.csv"),
+  t, 
+  read_csv("data/lookup_tables/P1_viral_family_of_tests.csv"),
   by = "test_requested"
 )
 
@@ -59,7 +61,7 @@ v <- v %>%
     virus_name, "(new\\s)?strain\\sof\\s", ""))
 
 
-# Create full P1 data frame by joining individual tables
+# Create full PREDICT-1 data frame by joining individual tables
 
 d <- full_join(e, a, by = "event_id") %>%
   full_join(s, by = "animal_id") %>%
@@ -83,8 +85,8 @@ d <- d %>%
 
 d.sample.sizes <- data.frame(
   "d", 
-  n_distinct(d$animal_id, na.rm = T), 
-  n_distinct(d$binomial, na.rm = T)
+  n_distinct(d$animal_id, na.rm = TRUE), 
+  n_distinct(d$binomial, na.rm = TRUE)
 )
 
 colnames(d.sample.sizes) <- c("data_frame", "n_animals", "n_species")
@@ -180,7 +182,8 @@ d2 <- d2 %>%
       paste0(test_requested, ": ",  test_requested_protocol),
   ) %>%
   left_join(
-    ., read_csv("data/lookup_tables/test_requested_mod_cleanup.csv"),
+    ., 
+    read_csv("data/lookup_tables/test_requested_mod_cleanup.csv"),
     by = "test_requested_mod"
   ) %>%
   mutate(
@@ -325,7 +328,7 @@ d.sample.sizes <-
 #+ data_definition_chunk, echo=FALSE, results="hide"
 
 
-# Adult female data
+# Create adult female bat dataset
 
 dat.f <- d3 %>%
   # Filter to adult females
@@ -359,7 +362,7 @@ table(dat.f$pregnant_mod, useNA = "ifany")
 table(dat.f$lactating_mod, useNA = "ifany")
 
 
-# Generate reproductive season variable
+# Generate reproductive season table
 
 repro.season.table <- d.bat %>%
   filter(
@@ -435,22 +438,24 @@ viral.fam.lac.sufficient <- dat.f.trim %>%
   filter(lactating_mod == 1, n >= 200) %>%
   pull(test_requested_viral_family)
 
-viral.families <- intersect(viral.fam.preg.sufficient, viral.fam.lac.sufficient)
+viral.fam.sufficient <- 
+  intersect(viral.fam.preg.sufficient, viral.fam.lac.sufficient)
 
-data.list <- vector("list", length(viral.families) + 1)
+data.list <- vector("list", length(viral.fam.sufficient) + 1)
 data.list[[1]] <- dat.f.trim
 names(data.list)[1] <- "dat.f"
 
-for(i in seq_along(viral.families)) {
+for(i in seq_along(viral.fam.sufficient)) {
   
-  assign(paste0("dat.f.", viral.families[i]), 
-         filter(dat.f.trim, test_requested_viral_family == viral.families[i]) %>%
-           droplevels()
+  assign(
+    paste0("dat.f.", viral.fam.sufficient[i]), 
+    filter(dat.f.trim, test_requested_viral_family == viral.fam.sufficient[i]) %>%
+      droplevels()
   )
   
-  data.list[[i + 1]] <- get(paste0("dat.f.", viral.families[i]))
+  data.list[[i + 1]] <- get(paste0("dat.f.", viral.fam.sufficient[i]))
   
-  names(data.list)[i + 1] <- paste0("dat.f.", viral.families[i])
+  names(data.list)[i + 1] <- paste0("dat.f.", viral.fam.sufficient[i])
 }
 
 # /*
@@ -465,8 +470,9 @@ for(i in seq_along(viral.families)) {
 
 for(i in seq_along(data.list)) {
   
-  saveRDS(get_stan_data(data.list[[i]]), 
-          file = paste0("stan/cleaned_data/", names(data.list)[i], ".stan.rds")
+  saveRDS(
+    get_stan_data(data.list[[i]]), 
+    file = paste0("stan/cleaned_data/", names(data.list)[i], ".stan.rds")
   )
 }
 
@@ -480,16 +486,15 @@ for(i in seq_along(data.list)) {
 
 # Summarize adult female dataset
 
-summarize(dat.f.trim, 
-          sample_size = n(), 
-          n_viral_families = 
-            n_distinct(test_requested_viral_family, na.rm = TRUE),
-          n_viruses = n_distinct(viral_species, na.rm = TRUE),
-          n_species = n_distinct(binomial, na.rm = TRUE),
-          n_years = n_distinct(year, na.rm = TRUE),
-          n_countries = n_distinct(country, na.rm = TRUE),
-          n_specimen_types = n_distinct(specimen_type_group, na.rm = TRUE),
-          n_test_protocols = n_distinct(test_requested_mod, na.rm = TRUE),
-          n_diagnostic_labs = n_distinct(diagnostic_laboratory_name, 
-                                         na.rm = TRUE)
+summarize(
+  dat.f.trim, 
+  sample_size = n(), 
+  n_viral_families = n_distinct(test_requested_viral_family, na.rm = TRUE),
+  n_viruses = n_distinct(viral_species, na.rm = TRUE),
+  n_species = n_distinct(binomial, na.rm = TRUE),
+  n_years = n_distinct(year, na.rm = TRUE),
+  n_countries = n_distinct(country, na.rm = TRUE),
+  n_specimen_types = n_distinct(specimen_type_group, na.rm = TRUE),
+  n_test_protocols = n_distinct(test_requested_mod, na.rm = TRUE),
+  n_diagnostic_labs = n_distinct(diagnostic_laboratory_name, na.rm = TRUE)
 )
