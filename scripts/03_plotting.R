@@ -963,7 +963,7 @@ ggsave("outputs/varying_ints_slopes_model/Fig3.png",
 # */
 
 
-# Supplementary Table 1
+# Table S1 - Species sample sizes
 
 
 temp_table <- dat.f.trim %>%
@@ -1278,7 +1278,7 @@ var.effect.labels$diagnostic_laboratory_name <-
 assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 
-# To plot all varying effects
+# To plot all varying intercepts clusters together
 
 png("outputs/varying_ints_model/FigS9a.png", width = 1200, height = 800)
 
@@ -1319,7 +1319,7 @@ p
 dev.off()
 
 
-# To plot varying effects one at a time
+# To plot all varying intercepts clusters one at a time
 
 plotting.list <- list(
   c("host_species_offset", "year", "country",
@@ -1399,7 +1399,7 @@ varying.intercept.slope.group.labels <- c(
 ) 
 
 
-# To plot all varying intercepts and slopes by species
+# To plot all varying intercepts and slopes by species together
 
 png("outputs/varying_ints_slopes_model/FigS8.png", width = 1500, height = 1500)
 
@@ -1522,7 +1522,7 @@ var.effect.labels$diagnostic_laboratory_name <-
 assert_that(length(cols.to.plot) == length(flatten(var.effect.labels)))
 
 
-# To plot all other varying effects
+# To plot all other varying intercepts clusters together
 
 png("outputs/varying_ints_slopes_model/FigS9a.png", width = 1200, height = 800)
 
@@ -1563,7 +1563,7 @@ p
 dev.off()
 
 
-# To plot other varying effects one at a time
+# To plot all other varying intercepts clusters one at a time
 
 plotting.list <- list(
   c("year", "country",
