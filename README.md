@@ -2,7 +2,7 @@
 
 This repository contains code, data, figures, and tables that support the manuscript: 
 
-Eskew, E.A., K.J. Olival, J.A.K. Mazet, P. Daszak, and PREDICT Consortium. 2025. A global-scale dataset of bat viral detection suggests that pregnancy reduces viral shedding. Proceedings of the Royal Society B: Biological Sciences. 
+Eskew, E.A., K.J. Olival, J.A.K. Mazet, and P. Daszak. 2025. [A global-scale dataset of bat viral detection suggests that pregnancy reduces viral shedding](https://doi.org/10.1098/rspb.2024.2381). Proceedings of the Royal Society B 292: 20242381. 
 
 The paper's analyses broadly address reproductive effects on bat viral detection and leverage data from the [USAID-funded PREDICT project](https://ohi.vetmed.ucdavis.edu/programs-projects/predict-project). Data were accessed from the [Emering Infectious Disease Information Technology Hub](https://www.eidith.org/) (EIDITH) database using the [`eidith` R package](https://ecohealthalliance.github.io/eidith/).
 
